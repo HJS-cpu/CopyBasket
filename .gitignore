@@ -1,0 +1,32 @@
+# Build output
+x64/
+Release/
+Debug/
+*.obj
+*.pdb
+*.ilk
+*.exp
+*.lib
+*.dll
+*.exe
+*.log
+*.tlog
+*.idb
+*.pch
+*.ipch
+
+# Visual Studio
+.vs/
+*.user
+*.suo
+*.ncb
+*.sdf
+*.opensdf
+*.VC.db
+*.VC.opendb
+ipch/
+
+# Intermediate directories
+CopyBasket/x64/
+CopyBasket/Release/
+CopyBasket/Debug/

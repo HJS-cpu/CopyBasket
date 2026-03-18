@@ -1,0 +1,9 @@
+; CopyBasket.def : Declares the module parameters for the DLL.
+
+LIBRARY CopyBasket
+
+EXPORTS
+    DllCanUnloadNow     PRIVATE
+    DllGetClassObject   PRIVATE
+    DllRegisterServer   PRIVATE
+    DllUnregisterServer PRIVATE
