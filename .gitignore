@@ -26,6 +26,9 @@ Debug/
 *.VC.opendb
 ipch/
 
+# Claude
+CLAUDE.md
+
 # Intermediate directories
 CopyBasket/x64/
 CopyBasket/Release/

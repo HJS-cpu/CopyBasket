@@ -1,0 +1,40 @@
+name: Build & Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Build x64 Release
+        run: msbuild CopyBasket.sln /p:Configuration=Release /p:Platform=x64 /verbosity:minimal
+
+      - name: Build x86 Release
+        run: msbuild CopyBasket.sln /p:Configuration=Release /p:Platform=Win32 /verbosity:minimal
+
+      - name: Prepare release assets
+        run: |
+          Copy-Item "x64\Release\CopyBasket.dll" "CopyBasket_x64.dll"
+          Copy-Item "Release\CopyBasket.dll" "CopyBasket_x86.dll"
+        shell: pwsh
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: |
+            CopyBasket_x64.dll
+            CopyBasket_x86.dll
