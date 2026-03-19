@@ -1,4 +1,5 @@
 #include "resource.h"
+#include "Version.h"
 #include <winresrc.h>
 
 LANGUAGE LANG_GERMAN, SUBLANG_GERMAN
@@ -6,8 +7,8 @@ LANGUAGE LANG_GERMAN, SUBLANG_GERMAN
 IDI_BASKET ICON "..\\Res\\basket.ico"
 
 VS_VERSION_INFO VERSIONINFO
- FILEVERSION 1,0,0,0
- PRODUCTVERSION 1,0,0,0
+ FILEVERSION COPYBASKET_VERSION_MAJOR,COPYBASKET_VERSION_MINOR,COPYBASKET_VERSION_PATCH,COPYBASKET_VERSION_BUILD
+ PRODUCTVERSION COPYBASKET_VERSION_MAJOR,COPYBASKET_VERSION_MINOR,COPYBASKET_VERSION_PATCH,COPYBASKET_VERSION_BUILD
  FILEFLAGSMASK 0x3fL
 #ifdef _DEBUG
  FILEFLAGS 0x1L
@@ -22,14 +23,14 @@ BEGIN
     BEGIN
         BLOCK "040704b0"
         BEGIN
-            VALUE "CompanyName", "\0"
+            VALUE "CompanyName", "HJS\0"
             VALUE "FileDescription", "CopyBasket Shell Extension\0"
-            VALUE "FileVersion", "1.0.0\0"
+            VALUE "FileVersion", "1.1.0\0"
             VALUE "InternalName", "CopyBasket\0"
-            VALUE "LegalCopyright", "\0"
+            VALUE "LegalCopyright", "\u00A9 2026 HJS (Hans-Joachim Schlingensief)\0"
             VALUE "OriginalFilename", "CopyBasket.dll\0"
             VALUE "ProductName", "CopyBasket\0"
-            VALUE "ProductVersion", "1.0.0\0"
+            VALUE "ProductVersion", "1.1.0\0"
         END
     END
     BLOCK "VarFileInfo"

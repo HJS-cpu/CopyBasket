@@ -160,6 +160,7 @@
     <ClInclude Include="BasketDialog.h" />
     <ClInclude Include="Strings.h" />
     <ClInclude Include="SettingsDialog.h" />
+    <ClInclude Include="Version.h" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="CopyBasket.rc" />

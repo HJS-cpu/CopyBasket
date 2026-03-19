@@ -51,6 +51,8 @@ struct StringTable {
     const wchar_t* SettingsLanguageLabel;
     const wchar_t* SettingsOK;
     const wchar_t* SettingsCancel;
+    const wchar_t* SettingsTabLanguage;
+    const wchar_t* SettingsTabAbout;
 };
 
 const StringTable& GetStrings();

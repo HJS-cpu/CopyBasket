@@ -1,18 +1,31 @@
 #include <windows.h>
+#include <commctrl.h>
+#include <uxtheme.h>
 #include "SettingsDialog.h"
 #include "Strings.h"
+#include "Version.h"
+
+#pragma comment(lib, "comctl32.lib")
+#pragma comment(lib, "uxtheme.lib")
 
 namespace SettingsDialog {
 
 static const WCHAR* WND_CLASS = L"CopyBasketSettings";
+static const int IDC_TAB = 2000;
 static const int IDC_COMBO = 2001;
 static const int IDC_OK = 2002;
 static const int IDC_CANCEL_BTN = 2003;
 static const int IDC_LABEL = 2004;
+static const int IDC_ABOUT_TEXT = 2005;
 
 struct DlgData {
+    HWND hTab;
+    // Language page
     HWND hLabel;
     HWND hCombo;
+    // About page
+    HWND hAboutText;
+    // Buttons
     HWND hBtnOK;
     HWND hBtnCancel;
     int initialSel;
@@ -29,6 +42,15 @@ static int GetCurrentLangIndex() {
     return 0;
 }
 
+static void ShowPage(DlgData* dd, int page) {
+    BOOL showLang = (page == 0);
+    BOOL showAbout = (page == 1);
+
+    ShowWindow(dd->hLabel, showLang ? SW_SHOW : SW_HIDE);
+    ShowWindow(dd->hCombo, showLang ? SW_SHOW : SW_HIDE);
+    ShowWindow(dd->hAboutText, showAbout ? SW_SHOW : SW_HIDE);
+}
+
 static LRESULT CALLBACK DlgWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     DlgData* dd = (DlgData*)GetWindowLongPtr(hwnd, GWLP_USERDATA);
 
@@ -41,37 +63,79 @@ static LRESULT CALLBACK DlgWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lP
         const StringTable& S = GetStrings();
         HFONT hFont = (HFONT)GetStockObject(DEFAULT_GUI_FONT);
 
+        // Tab Control
+        dd->hTab = CreateWindowExW(
+            0, WC_TABCONTROLW, L"",
+            WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS,
+            8, 8, 304, 130,
+            hwnd, (HMENU)(INT_PTR)IDC_TAB, GetModuleHandle(NULL), NULL);
+        SendMessage(dd->hTab, WM_SETFONT, (WPARAM)hFont, TRUE);
+        SetWindowTheme(dd->hTab, L"", L"");
+
+        TCITEMW tie = {};
+        tie.mask = TCIF_TEXT;
+        tie.pszText = (LPWSTR)S.SettingsTabLanguage;
+        SendMessageW(dd->hTab, TCM_INSERTITEMW, 0, (LPARAM)&tie);
+        tie.pszText = (LPWSTR)S.SettingsTabAbout;
+        SendMessageW(dd->hTab, TCM_INSERTITEMW, 1, (LPARAM)&tie);
+
+        // Language page controls (inside tab area)
         dd->hLabel = CreateWindowExW(
             0, L"STATIC", S.SettingsLanguageLabel,
             WS_CHILD | WS_VISIBLE,
-            16, 20, 80, 20,
+            24, 68, 80, 20,
             hwnd, (HMENU)(INT_PTR)IDC_LABEL, GetModuleHandle(NULL), NULL);
         SendMessage(dd->hLabel, WM_SETFONT, (WPARAM)hFont, TRUE);
 
         dd->hCombo = CreateWindowExW(
             0, L"COMBOBOX", L"",
             WS_CHILD | WS_VISIBLE | CBS_DROPDOWNLIST | WS_VSCROLL,
-            100, 17, 180, 120,
+            108, 65, 190, 120,
             hwnd, (HMENU)(INT_PTR)IDC_COMBO, GetModuleHandle(NULL), NULL);
         SendMessage(dd->hCombo, WM_SETFONT, (WPARAM)hFont, TRUE);
         SendMessageW(dd->hCombo, CB_ADDSTRING, 0, (LPARAM)L"Deutsch");
         SendMessageW(dd->hCombo, CB_ADDSTRING, 0, (LPARAM)L"English");
         SendMessageW(dd->hCombo, CB_SETCURSEL, dd->initialSel, 0);
 
+        // About page controls
+        WCHAR szAbout[256];
+        wsprintfW(szAbout,
+            L"CopyBasket v%s\r\n\r\n"
+            L"\u00A9 2026 HJS (Hans-Joachim Schlingensief)",
+            COPYBASKET_VERSION_STR);
+
+        dd->hAboutText = CreateWindowExW(
+            0, L"STATIC", szAbout,
+            WS_CHILD | SS_CENTER,
+            24, 48, 272, 70,
+            hwnd, (HMENU)(INT_PTR)IDC_ABOUT_TEXT, GetModuleHandle(NULL), NULL);
+        SendMessage(dd->hAboutText, WM_SETFONT, (WPARAM)hFont, TRUE);
+
+        // Buttons
         dd->hBtnOK = CreateWindowExW(
             0, L"BUTTON", S.SettingsOK,
             WS_CHILD | WS_VISIBLE | BS_DEFPUSHBUTTON,
-            110, 60, 85, 28,
+            140, 148, 85, 28,
             hwnd, (HMENU)(INT_PTR)IDC_OK, GetModuleHandle(NULL), NULL);
         SendMessage(dd->hBtnOK, WM_SETFONT, (WPARAM)hFont, TRUE);
 
         dd->hBtnCancel = CreateWindowExW(
             0, L"BUTTON", S.SettingsCancel,
             WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
-            200, 60, 85, 28,
+            230, 148, 85, 28,
             hwnd, (HMENU)(INT_PTR)IDC_CANCEL_BTN, GetModuleHandle(NULL), NULL);
         SendMessage(dd->hBtnCancel, WM_SETFONT, (WPARAM)hFont, TRUE);
 
+        ShowPage(dd, 0);
+        return 0;
+    }
+
+    case WM_NOTIFY: {
+        NMHDR* pnm = (NMHDR*)lParam;
+        if (pnm->idFrom == IDC_TAB && pnm->code == TCN_SELCHANGE) {
+            int sel = (int)SendMessageW(dd->hTab, TCM_GETCURSEL, 0, 0);
+            ShowPage(dd, sel);
+        }
         return 0;
     }
 
@@ -101,6 +165,9 @@ static LRESULT CALLBACK DlgWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lP
 }
 
 void Show(HWND hwndParent) {
+    INITCOMMONCONTROLSEX icex = { sizeof(icex), ICC_TAB_CLASSES };
+    InitCommonControlsEx(&icex);
+
     WNDCLASSW wc = {};
     wc.lpfnWndProc = DlgWndProc;
     wc.hInstance = GetModuleHandle(NULL);
@@ -116,7 +183,7 @@ void Show(HWND hwndParent) {
 
     int sw = GetSystemMetrics(SM_CXSCREEN);
     int sh = GetSystemMetrics(SM_CYSCREEN);
-    int ww = 320, wh = 140;
+    int ww = 336, wh = 220;
     int x = (sw - ww) / 2;
     int y = (sh - wh) / 2;
 

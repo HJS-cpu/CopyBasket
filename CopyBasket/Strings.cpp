@@ -49,6 +49,8 @@ static const StringTable s_DE = {
     L"Sprache:",
     L"OK",
     L"Abbrechen",
+    L"Sprache",
+    L"\u00DCber",
 };
 
 static const StringTable s_EN = {
@@ -100,6 +102,8 @@ static const StringTable s_EN = {
     L"Language:",
     L"OK",
     L"Cancel",
+    L"Language",
+    L"About",
 };
 
 static const StringTable* s_pActive = &s_DE;
