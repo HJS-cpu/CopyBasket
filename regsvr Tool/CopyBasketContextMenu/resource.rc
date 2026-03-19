@@ -1,0 +1,16 @@
+#include <windows.h>
+#include "resource.h"
+
+// Icon
+IDI_APPICON ICON "Icon.ico"
+
+// Dialog definition
+IDD_MAIN_DIALOG DIALOGEX 0, 0, 160, 75
+STYLE DS_SETFONT | DS_MODALFRAME | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "CopyBasket Context Menu Tool"
+FONT 8, "MS Shell Dlg", 400, 0, 0x1
+BEGIN
+    AUTORADIOBUTTON "Activate CopyBasket Context Menu", IDC_RADIO_ACTIVATE, 10, 15, 140, 12, WS_GROUP | WS_TABSTOP
+    AUTORADIOBUTTON "Deactivate CopyBasket Context Menu", IDC_RADIO_DEACTIVATE, 10, 27, 140, 12
+    DEFPUSHBUTTON "OK", IDOK, 55, 50, 50, 14
+END

@@ -19,16 +19,20 @@ jobs:
       - name: Setup MSBuild
         uses: microsoft/setup-msbuild@v2
 
-      - name: Build x64 Release
+      - name: Build CopyBasket x64
         run: msbuild CopyBasket.sln /p:Configuration=Release /p:Platform=x64 /verbosity:minimal
 
-      - name: Build x86 Release
+      - name: Build CopyBasket x86
         run: msbuild CopyBasket.sln /p:Configuration=Release /p:Platform=Win32 /verbosity:minimal
+
+      - name: Build CB-CMT (regsvr Tool)
+        run: msbuild "regsvr Tool\CopyBasketContextMenu.sln" /p:Configuration=Release /p:Platform=x64 /verbosity:minimal
 
       - name: Prepare release assets
         run: |
           Copy-Item "x64\Release\CopyBasket.dll" "CopyBasket_x64.dll"
           Copy-Item "Release\CopyBasket.dll" "CopyBasket_x86.dll"
+          Copy-Item "regsvr Tool\bin\Release\CB-CMT.exe" "CB-CMT.exe"
         shell: pwsh
 
       - name: Create GitHub Release
@@ -38,3 +42,4 @@ jobs:
           files: |
             CopyBasket_x64.dll
             CopyBasket_x86.dll
+            CB-CMT.exe

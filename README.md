@@ -30,8 +30,9 @@ A Windows Explorer shell extension that lets you collect files into a virtual "b
 **[⬇️ Download Latest Release](https://github.com/HJS-cpu/CopyBasket/releases/latest)**
 
 Each release includes:
-- **CopyBasket_x64.dll** — 64-bit build
-- **CopyBasket_x86.dll** — 32-bit build
+- **CopyBasket_x64.dll** — 64-bit shell extension
+- **CopyBasket_x86.dll** — 32-bit shell extension
+- **CB-CMT.exe** — Registration tool (activates/deactivates the context menu)
 
 ---
 
@@ -44,9 +45,13 @@ Each release includes:
 
 ## 🔧 Installation
 
-1. Download the DLL matching your system architecture (x64 or x86).
-2. Place it in a permanent location (e.g. `C:\Program Files\CopyBasket\`).
-3. Open an **elevated** Command Prompt and register the DLL:
+### Using CB-CMT (recommended)
+
+1. Download `CopyBasket_x64.dll` (or `_x86.dll`) and `CB-CMT.exe` from the [latest release](https://github.com/HJS-cpu/CopyBasket/releases/latest).
+2. Place both files in the same folder (e.g. `C:\Program Files\CopyBasket\`).
+3. Run **CB-CMT.exe** — it will prompt for elevation and let you activate or deactivate the context menu with one click.
+
+### Manual (regsvr32)
 
 ```cmd
 regsvr32 "C:\Program Files\CopyBasket\CopyBasket.dll"
@@ -90,14 +95,17 @@ Items are grayed out when the basket is empty. "Add to Basket" and "Copy Path" a
 ### Build
 
 ```bash
-# x64 Release
+# Shell Extension (x64 + x86)
 MSBuild.exe CopyBasket.sln /p:Configuration=Release /p:Platform=x64
-
-# x86 Release
 MSBuild.exe CopyBasket.sln /p:Configuration=Release /p:Platform=Win32
+
+# Registration Tool (x64)
+MSBuild.exe "regsvr Tool\CopyBasketContextMenu.sln" /p:Configuration=Release /p:Platform=x64
 ```
 
-Output: `x64\Release\CopyBasket.dll` / `Release\CopyBasket.dll`
+Output:
+- `x64\Release\CopyBasket.dll` / `Release\CopyBasket.dll`
+- `regsvr Tool\bin\Release\CB-CMT.exe`
 
 ---
 

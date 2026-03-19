@@ -28,8 +28,14 @@ ipch/
 
 # Claude
 CLAUDE.md
+.claude/
 
 # Intermediate directories
 CopyBasket/x64/
 CopyBasket/Release/
 CopyBasket/Debug/
+
+# regsvr Tool build output
+regsvr Tool/bin/
+regsvr Tool/CopyBasketContextMenu/Release/
+regsvr Tool/CopyBasketContextMenu/Debug/
