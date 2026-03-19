@@ -30,16 +30,15 @@ jobs:
 
       - name: Prepare release assets
         run: |
-          Copy-Item "x64\Release\CopyBasket.dll" "CopyBasket_x64.dll"
-          Copy-Item "Release\CopyBasket.dll" "CopyBasket_x86.dll"
-          Copy-Item "regsvr Tool\bin\Release\CB-CMT.exe" "CB-CMT.exe"
+          New-Item -ItemType Directory -Path "CopyBasket" -Force
+          Copy-Item "x64\Release\CopyBasket.dll" "CopyBasket\CopyBasket_x64.dll"
+          Copy-Item "Release\CopyBasket.dll" "CopyBasket\CopyBasket_x86.dll"
+          Copy-Item "regsvr Tool\bin\Release\CB-CMT.exe" "CopyBasket\CB-CMT.exe"
+          Compress-Archive -Path "CopyBasket\*" -DestinationPath "CopyBasket_${{ github.ref_name }}.zip"
         shell: pwsh
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           generate_release_notes: true
-          files: |
-            CopyBasket_x64.dll
-            CopyBasket_x86.dll
-            CB-CMT.exe
+          files: CopyBasket_${{ github.ref_name }}.zip
