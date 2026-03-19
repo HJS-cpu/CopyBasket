@@ -30,11 +30,11 @@ jobs:
 
       - name: Prepare release assets
         run: |
-          New-Item -ItemType Directory -Path "CopyBasket" -Force
-          Copy-Item "x64\Release\CopyBasket.dll" "CopyBasket\CopyBasket_x64.dll"
-          Copy-Item "Release\CopyBasket.dll" "CopyBasket\CopyBasket_x86.dll"
-          Copy-Item "regsvr Tool\bin\Release\CB-CMT.exe" "CopyBasket\CB-CMT.exe"
-          Compress-Archive -Path "CopyBasket\*" -DestinationPath "CopyBasket_${{ github.ref_name }}.zip"
+          New-Item -ItemType Directory -Path "_release" -Force
+          Copy-Item "x64\Release\CopyBasket.dll" "_release\CopyBasket_x64.dll"
+          Copy-Item "Release\CopyBasket.dll" "_release\CopyBasket_x86.dll"
+          Copy-Item "regsvr Tool\bin\Release\CB-CMT.exe" "_release\CB-CMT.exe"
+          Compress-Archive -Path "_release\*" -DestinationPath "CopyBasket_${{ github.ref_name }}.zip"
         shell: pwsh
 
       - name: Create GitHub Release
