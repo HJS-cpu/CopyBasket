@@ -30,9 +30,8 @@ A Windows Explorer shell extension that lets you collect files into a virtual "b
 **[⬇️ Download Latest Release](https://github.com/HJS-cpu/CopyBasket/releases/latest)**
 
 Each release includes:
-- **CopyBasket_x64.dll** — 64-bit shell extension
-- **CopyBasket_x86.dll** — 32-bit shell extension
-- **CB-CMT.exe** — Registration tool (activates/deactivates the context menu)
+- **CopyBasket-X.Y.Z-setup.exe** — Installer (automatic registration, recommended)
+- **CopyBasket_vX.Y.Z.zip** — Portable package (DLLs + CB-CMT.exe)
 
 ---
 
@@ -45,10 +44,16 @@ Each release includes:
 
 ## 🔧 Installation
 
-### Using CB-CMT (recommended)
+### Using the Installer (recommended)
 
-1. Download `CopyBasket_x64.dll` (or `_x86.dll`) and `CB-CMT.exe` from the [latest release](https://github.com/HJS-cpu/CopyBasket/releases/latest).
-2. Place both files in the same folder (e.g. `C:\Program Files\CopyBasket\`).
+1. Download **`CopyBasket-X.Y.Z-setup.exe`** from the [latest release](https://github.com/HJS-cpu/CopyBasket/releases/latest).
+2. Run the installer — it will request admin rights, install the correct DLL (x64/x86), and register the shell extension automatically.
+3. To uninstall, use "Programs and Features" in Control Panel.
+
+### Using CB-CMT (portable)
+
+1. Download **`CopyBasket_vX.Y.Z.zip`** from the [latest release](https://github.com/HJS-cpu/CopyBasket/releases/latest).
+2. Extract `CopyBasket_x64.dll` (or `_x86.dll`) and `CB-CMT.exe` to the same folder (e.g. `C:\Program Files\CopyBasket\`).
 3. Run **CB-CMT.exe** — it will prompt for elevation and let you activate or deactivate the context menu with one click.
 
 ### Manual (regsvr32)
@@ -127,6 +132,12 @@ This project is provided as-is. See the [LICENSE](LICENSE) file for details.
 ---
 
 ## 📝 Changelog
+
+### v1.1.0
+- NSIS Installer with automatic `regsvr32` registration/unregistration
+- Architecture detection (x64/x86) — installs the correct DLL
+- Add/Remove Programs entry with uninstaller
+- Tabbed settings dialog (Language + About)
 
 ### v1.0.0
 - Initial release
