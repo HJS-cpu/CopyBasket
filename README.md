@@ -1,7 +1,7 @@
 # CopyBasket
 
 [![Build & Release](https://github.com/HJS-cpu/CopyBasket/actions/workflows/release.yml/badge.svg)](https://github.com/HJS-cpu/CopyBasket/actions/workflows/release.yml)
-[![Latest Release](https://img.shields.io/github/v/release/HJS-cpu/CopyBasket)](https://github.com/HJS-cpu/CopyBasket/releases/latest)
+[![Latest Release](https://img.shields.io/github/v/release/HJS-cpu/CopyBasket?include_prereleases&sort=semver)](https://github.com/HJS-cpu/CopyBasket/releases/latest)
 
 A Windows Explorer shell extension that lets you collect files into a virtual "basket" and then copy or move them all at once to a target directory.
 
