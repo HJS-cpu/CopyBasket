@@ -105,9 +105,8 @@ Section "CopyBasket" SecCore
   ; Notify shell of changes
   System::Call 'shell32::SHChangeNotify(i 0x08000000, i 0x0000, p 0, p 0)'
 
-  ; Icon and registration tool
+  ; Icon
   File "..\Res\basket.ico"
-  File /oname=CB-CMT.exe "..\regsvr Tool\bin\Release\CB-CMT.exe"
 
   ; Store installation folder
   WriteRegStr HKLM "Software\${PRODUCT_NAME}" "InstallDir" $INSTDIR
@@ -152,11 +151,11 @@ Section "Uninstall"
 
   ; Remove files
   Delete "$INSTDIR\CopyBasket.dll"
-  Delete "$INSTDIR\CB-CMT.exe"
   Delete "$INSTDIR\basket.ico"
   Delete "$INSTDIR\Uninstall.exe"
 
   ; Remove registry keys
+  DeleteRegKey HKCU "Software\${PRODUCT_NAME}"
   DeleteRegKey HKLM "Software\${PRODUCT_NAME}"
   DeleteRegKey HKLM "${PRODUCT_UNINST_KEY}"
 

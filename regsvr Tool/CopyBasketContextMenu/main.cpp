@@ -18,6 +18,9 @@ static const wchar_t* DLL_NAME = L"CopyBasket.dll";
 // Registry path to check if DLL is registered
 static const wchar_t* REG_PATH = L"SOFTWARE\\Classes\\*\\shellex\\ContextMenuHandlers\\CopyBasket";
 
+// User settings registry key (HKCU)
+static const wchar_t* SETTINGS_KEY = L"Software\\CopyBasket";
+
 // Check if the CopyBasket context menu handler is registered
 BOOL IsCopyBasketRegistered()
 {
@@ -29,6 +32,12 @@ BOOL IsCopyBasketRegistered()
         return TRUE;
     }
     return FALSE;
+}
+
+// Delete CopyBasket user settings from registry (HKCU\Software\CopyBasket)
+static BOOL DeleteUserSettings()
+{
+    return RegDeleteKeyW(HKEY_CURRENT_USER, SETTINGS_KEY) == ERROR_SUCCESS;
 }
 
 // Dialog procedure
@@ -48,14 +57,52 @@ INT_PTR CALLBACK DialogProc(HWND hDlg, UINT uMsg, WPARAM wParam, LPARAM lParam)
             CheckRadioButton(hDlg, IDC_RADIO_ACTIVATE, IDC_RADIO_DEACTIVATE, IDC_RADIO_DEACTIVATE);
         else
             CheckRadioButton(hDlg, IDC_RADIO_ACTIVATE, IDC_RADIO_DEACTIVATE, IDC_RADIO_ACTIVATE);
+
+        // Set warning text (hidden by default)
+        SetDlgItemTextW(hDlg, IDC_WARNING_TEXT, L"\x26A0 Deletes all program settings permanently");
+
+        // Disable checkbox if no user settings exist yet
+        HKEY hSettingsKey;
+        if (RegOpenKeyExW(HKEY_CURRENT_USER, SETTINGS_KEY, 0, KEY_READ, &hSettingsKey) == ERROR_SUCCESS)
+            RegCloseKey(hSettingsKey);
+        else
+            EnableWindow(GetDlgItem(hDlg, IDC_CHECK_CLEANREG), FALSE);
+
         return TRUE;
     }
 
     case WM_COMMAND:
         switch (LOWORD(wParam))
         {
+        case IDC_CHECK_CLEANREG:
+        {
+            // Toggle warning text visibility
+            BOOL checked = IsDlgButtonChecked(hDlg, IDC_CHECK_CLEANREG) == BST_CHECKED;
+            ShowWindow(GetDlgItem(hDlg, IDC_WARNING_TEXT), checked ? SW_SHOW : SW_HIDE);
+            return TRUE;
+        }
+
         case IDOK:
         {
+            // Handle "Delete User Settings" checkbox
+            if (IsDlgButtonChecked(hDlg, IDC_CHECK_CLEANREG) == BST_CHECKED)
+            {
+                int confirm = MessageBoxW(hDlg,
+                    L"This will permanently delete all CopyBasket user settings.\n\n"
+                    L"Are you sure?",
+                    L"Confirm Deletion",
+                    MB_YESNO | MB_ICONWARNING | MB_DEFBUTTON2);
+
+                if (confirm == IDYES)
+                {
+                    DeleteUserSettings();
+                }
+                else
+                {
+                    return TRUE; // User cancelled, stay in dialog
+                }
+            }
+
             // Get the directory where the EXE is located
             wchar_t exePath[MAX_PATH];
             GetModuleFileNameW(NULL, exePath, MAX_PATH);
@@ -68,6 +115,18 @@ INT_PTR CALLBACK DialogProc(HWND hDlg, UINT uMsg, WPARAM wParam, LPARAM lParam)
             // Build full DLL path
             wchar_t dllPath[MAX_PATH];
             wsprintfW(dllPath, L"%s\\%s", exePath, DLL_NAME);
+
+            // Check if DLL exists
+            if (GetFileAttributesW(dllPath) == INVALID_FILE_ATTRIBUTES)
+            {
+                MessageBoxW(hDlg,
+                    L"CopyBasket.dll not found.\n"
+                    L"The DLL must be in the same directory as CB-CMT.exe.",
+                    L"Error",
+                    MB_OK | MB_ICONERROR);
+                EndDialog(hDlg, IDOK);
+                return TRUE;
+            }
 
             // Build regsvr32 parameters
             wchar_t params[MAX_PATH + 20];

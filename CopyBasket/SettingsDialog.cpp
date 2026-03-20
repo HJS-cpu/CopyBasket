@@ -1,6 +1,7 @@
 #include <windows.h>
 #include <commctrl.h>
 #include <uxtheme.h>
+#include <shellapi.h>
 #include "SettingsDialog.h"
 #include "Strings.h"
 #include "Version.h"
@@ -17,6 +18,8 @@ static const int IDC_OK = 2002;
 static const int IDC_CANCEL_BTN = 2003;
 static const int IDC_LABEL = 2004;
 static const int IDC_ABOUT_TEXT = 2005;
+static const int IDC_LINK = 2006;
+static const int IDC_COPYRIGHT = 2007;
 
 struct DlgData {
     HWND hTab;
@@ -25,6 +28,9 @@ struct DlgData {
     HWND hCombo;
     // About page
     HWND hAboutText;
+    HWND hLink;
+    HWND hCopyright;
+    HFONT hBoldFont;
     // Buttons
     HWND hBtnOK;
     HWND hBtnCancel;
@@ -49,6 +55,8 @@ static void ShowPage(DlgData* dd, int page) {
     ShowWindow(dd->hLabel, showLang ? SW_SHOW : SW_HIDE);
     ShowWindow(dd->hCombo, showLang ? SW_SHOW : SW_HIDE);
     ShowWindow(dd->hAboutText, showAbout ? SW_SHOW : SW_HIDE);
+    ShowWindow(dd->hLink, showAbout ? SW_SHOW : SW_HIDE);
+    ShowWindow(dd->hCopyright, showAbout ? SW_SHOW : SW_HIDE);
 }
 
 static LRESULT CALLBACK DlgWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
@@ -97,19 +105,47 @@ static LRESULT CALLBACK DlgWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lP
         SendMessageW(dd->hCombo, CB_ADDSTRING, 0, (LPARAM)L"English");
         SendMessageW(dd->hCombo, CB_SETCURSEL, dd->initialSel, 0);
 
-        // About page controls
-        WCHAR szAbout[256];
-        wsprintfW(szAbout,
-            L"CopyBasket v%s\r\n\r\n"
-            L"\u00A9 2026 HJS (Hans-Joachim Schlingensief)",
-            COPYBASKET_VERSION_STR);
+        // Bold font for title (1px larger)
+        LOGFONTW lf = {};
+        GetObjectW(hFont, sizeof(lf), &lf);
+        lf.lfWeight = FW_BOLD;
+        lf.lfHeight = lf.lfHeight + (lf.lfHeight < 0 ? -3 : 3);
+        dd->hBoldFont = CreateFontIndirectW(&lf);
+
+        // About page controls — Title (bold, centered)
+        WCHAR szTitle[128];
+        wsprintfW(szTitle, L"CopyBasket v%s", COPYBASKET_VERSION_STR);
 
         dd->hAboutText = CreateWindowExW(
-            0, L"STATIC", szAbout,
+            0, L"STATIC", szTitle,
             WS_CHILD | SS_CENTER,
-            24, 48, 272, 70,
+            24, 48, 272, 20,
             hwnd, (HMENU)(INT_PTR)IDC_ABOUT_TEXT, GetModuleHandle(NULL), NULL);
-        SendMessage(dd->hAboutText, WM_SETFONT, (WPARAM)hFont, TRUE);
+        SendMessage(dd->hAboutText, WM_SETFONT, (WPARAM)dd->hBoldFont, TRUE);
+
+        // About page controls — Website link (centered via LM_GETIDEALSIZE)
+        dd->hLink = CreateWindowExW(
+            0, WC_LINK,
+            L"<a href=\"https://hjs.page.gd/cb\">hjs.page.gd/cb</a>",
+            WS_CHILD,
+            0, 72, 272, 20,
+            hwnd, (HMENU)(INT_PTR)IDC_LINK, GetModuleHandle(NULL), NULL);
+        SendMessage(dd->hLink, WM_SETFONT, (WPARAM)hFont, TRUE);
+
+        SIZE idealSize = {};
+        SendMessageW(dd->hLink, LM_GETIDEALSIZE, 272, (LPARAM)&idealSize);
+        int linkW = idealSize.cx;
+        int linkX = 24 + (272 - linkW) / 2;
+        SetWindowPos(dd->hLink, NULL, linkX, 72, linkW, 20, SWP_NOZORDER);
+
+        // About page controls — Copyright (centered)
+        dd->hCopyright = CreateWindowExW(
+            0, L"STATIC",
+            L"\u00A9 2026 HJS (Hans-Joachim Schlingensief)",
+            WS_CHILD | SS_CENTER,
+            24, 96, 272, 20,
+            hwnd, (HMENU)(INT_PTR)IDC_COPYRIGHT, GetModuleHandle(NULL), NULL);
+        SendMessage(dd->hCopyright, WM_SETFONT, (WPARAM)hFont, TRUE);
 
         // Buttons
         dd->hBtnOK = CreateWindowExW(
@@ -136,6 +172,10 @@ static LRESULT CALLBACK DlgWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lP
             int sel = (int)SendMessageW(dd->hTab, TCM_GETCURSEL, 0, 0);
             ShowPage(dd, sel);
         }
+        if (pnm->idFrom == IDC_LINK && (pnm->code == NM_CLICK || pnm->code == NM_RETURN)) {
+            ShellExecuteW(NULL, L"open", L"https://hjs.page.gd/cb", NULL, NULL, SW_SHOWNORMAL);
+            DestroyWindow(hwnd);
+        }
         return 0;
     }
 
@@ -157,6 +197,10 @@ static LRESULT CALLBACK DlgWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lP
         return 0;
 
     case WM_DESTROY:
+        if (dd && dd->hBoldFont) {
+            DeleteObject(dd->hBoldFont);
+            dd->hBoldFont = NULL;
+        }
         PostQuitMessage(0);
         return 0;
     }
@@ -165,7 +209,7 @@ static LRESULT CALLBACK DlgWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lP
 }
 
 void Show(HWND hwndParent) {
-    INITCOMMONCONTROLSEX icex = { sizeof(icex), ICC_TAB_CLASSES };
+    INITCOMMONCONTROLSEX icex = { sizeof(icex), ICC_TAB_CLASSES | ICC_LINK_CLASS };
     InitCommonControlsEx(&icex);
 
     WNDCLASSW wc = {};
