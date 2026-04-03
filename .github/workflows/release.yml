@@ -20,7 +20,7 @@ jobs:
         uses: actions/checkout@v6
 
       - name: Setup MSBuild
-        uses: microsoft/setup-msbuild@v2
+        uses: microsoft/setup-msbuild@v3
 
       - name: Build CopyBasket x64
         run: msbuild CopyBasket.sln /p:Configuration=Release /p:Platform=x64 /verbosity:minimal
