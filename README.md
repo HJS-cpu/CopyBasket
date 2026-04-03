@@ -138,12 +138,14 @@ This project is provided as-is. See the [LICENSE](LICENSE) file for details.
 - Migrated file operations from `SHFileOperationW` to modern `IFileOperation` API with `CFileOperationProgressSink`
 - Smart basket tracking: only successfully copied/moved files are removed, partial failures keep remaining items
 - Navigation pane and virtual folder support via `IShellItemArray` fallback
-- Right-click on a single folder uses it as target directory for "Copy/Move Basket Here"
-- BrowseForFolder dialog re-entrance guard prevents duplicate dialogs
+
+### v1.2.0
 - Basket dialog: statusbar with file count, sortable columns with sort arrows, Ctrl+A to select all, initial keyboard focus
 - Basket dialog: deferred window positioning (`BeginDeferWindowPos`) for smooth resizing
-- Installer uninstaller now removes `%APPDATA%\CopyBasket` user data
+- Right-click on a single folder uses it as target directory for "Copy/Move Basket Here"
+- BrowseForFolder dialog re-entrance guard prevents duplicate dialogs
 - CB-CMT: "Delete User Settings" checkbox for cleaning up registry and AppData
+- Installer uninstaller now removes `%APPDATA%\CopyBasket` user data
 
 ### v1.1.0
 - NSIS Installer with automatic `regsvr32` registration/unregistration
