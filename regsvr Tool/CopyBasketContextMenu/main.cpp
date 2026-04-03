@@ -7,6 +7,7 @@
 
 #include <windows.h>
 #include <shellapi.h>
+#include <shlobj.h>
 #include "resource.h"
 
 // Mutex name for single instance check
@@ -34,10 +35,30 @@ BOOL IsCopyBasketRegistered()
     return FALSE;
 }
 
-// Delete CopyBasket user settings from registry (HKCU\Software\CopyBasket)
+// Delete CopyBasket user settings (registry + %APPDATA%\CopyBasket folder)
 static BOOL DeleteUserSettings()
 {
-    return RegDeleteKeyW(HKEY_CURRENT_USER, SETTINGS_KEY) == ERROR_SUCCESS;
+    BOOL success = RegDeleteKeyW(HKEY_CURRENT_USER, SETTINGS_KEY) == ERROR_SUCCESS;
+
+    // Delete %APPDATA%\CopyBasket\ folder (contains basket.txt)
+    wchar_t appData[MAX_PATH];
+    if (SUCCEEDED(SHGetFolderPathW(NULL, CSIDL_APPDATA, NULL, 0, appData)))
+    {
+        wchar_t basketDir[MAX_PATH];
+        wsprintfW(basketDir, L"%s\\CopyBasket", appData);
+
+        // SHFileOperation requires double-null-terminated string
+        wchar_t from[MAX_PATH + 1] = {};
+        wcscpy_s(from, basketDir);
+
+        SHFILEOPSTRUCTW op = {};
+        op.wFunc = FO_DELETE;
+        op.pFrom = from;
+        op.fFlags = FOF_NOCONFIRMATION | FOF_NOERRORUI | FOF_SILENT;
+        SHFileOperationW(&op);
+    }
+
+    return success;
 }
 
 // Dialog procedure

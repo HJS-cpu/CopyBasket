@@ -154,6 +154,9 @@ Section "Uninstall"
   Delete "$INSTDIR\basket.ico"
   Delete "$INSTDIR\Uninstall.exe"
 
+  ; Remove user data (%APPDATA%\CopyBasket)
+  RMDir /r "$APPDATA\CopyBasket"
+
   ; Remove registry keys
   DeleteRegKey HKCU "Software\${PRODUCT_NAME}"
   DeleteRegKey HKLM "Software\${PRODUCT_NAME}"

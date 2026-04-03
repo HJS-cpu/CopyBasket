@@ -4,7 +4,7 @@
 
 namespace BasketStore {
 
-std::wstring GetBasketFilePath() {
+static std::wstring GetBasketFilePath() {
     WCHAR szAppData[MAX_PATH];
     if (SUCCEEDED(SHGetFolderPathW(NULL, CSIDL_APPDATA, NULL, 0, szAppData))) {
         std::wstring path(szAppData);

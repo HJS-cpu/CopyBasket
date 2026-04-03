@@ -106,13 +106,14 @@ STDMETHODIMP CShellExt::Initialize(LPCITEMIDLIST pIDFolder, LPDATAOBJECT pDataOb
 
     // Try to get selected files via CF_HDROP
     if (pDataObj) {
+        m_pDataObj = pDataObj;
+        pDataObj->AddRef();
+
         FORMATETC fmte = { CF_HDROP, NULL, DVASPECT_CONTENT, -1, TYMED_HGLOBAL };
         if (SUCCEEDED(pDataObj->GetData(&fmte, &m_stgMedium))) {
             m_cbFiles = DragQueryFileW((HDROP)m_stgMedium.hGlobal, (UINT)-1, NULL, 0);
             if (m_cbFiles > 0) {
                 m_bIsBackground = FALSE;
-                m_pDataObj = pDataObj;
-                pDataObj->AddRef();
 
                 // If no folder from pidlFolder, extract from first file path
                 if (m_szFolder[0] == L'\0') {
@@ -122,9 +123,55 @@ STDMETHODIMP CShellExt::Initialize(LPCITEMIDLIST pIDFolder, LPDATAOBJECT pDataOb
                     WCHAR* pSlash = wcsrchr(m_szFolder, L'\\');
                     if (pSlash) *pSlash = L'\0';
                 }
+
+                // If single folder selected, use it as target for "hierher" operations
+                if (m_cbFiles == 1) {
+                    WCHAR szFile[MAX_PATH];
+                    DragQueryFileW((HDROP)m_stgMedium.hGlobal, 0, szFile, MAX_PATH);
+                    DWORD attr = GetFileAttributesW(szFile);
+                    if (attr != INVALID_FILE_ATTRIBUTES && (attr & FILE_ATTRIBUTE_DIRECTORY)) {
+                        lstrcpyW(m_szFolder, szFile);
+                    }
+                }
             } else {
                 ReleaseStgMedium(&m_stgMedium);
                 ZeroMemory(&m_stgMedium, sizeof(m_stgMedium));
+            }
+        }
+
+        // Fallback: CF_HDROP unavailable (nav pane, virtual folders, etc.)
+        if (m_bIsBackground) {
+            IShellItemArray* psia = NULL;
+            if (SUCCEEDED(SHCreateShellItemArrayFromDataObject(pDataObj, IID_PPV_ARGS(&psia)))) {
+                DWORD count = 0;
+                psia->GetCount(&count);
+                if (count > 0) {
+                    m_bIsBackground = FALSE;
+                    m_cbFiles = count;
+
+                    IShellItem* psi = NULL;
+                    if (SUCCEEDED(psia->GetItemAt(0, &psi))) {
+                        PWSTR pszPath = NULL;
+                        if (SUCCEEDED(psi->GetDisplayName(SIGDN_FILESYSPATH, &pszPath))) {
+                            // If no folder from pidlFolder, extract parent from first item
+                            if (m_szFolder[0] == L'\0') {
+                                lstrcpyW(m_szFolder, pszPath);
+                                WCHAR* pSlash = wcsrchr(m_szFolder, L'\\');
+                                if (pSlash) *pSlash = L'\0';
+                            }
+                            // Single folder: use as target for "hierher" operations
+                            if (count == 1) {
+                                SFGAOF attrs = 0;
+                                if (SUCCEEDED(psi->GetAttributes(SFGAO_FOLDER, &attrs)) && (attrs & SFGAO_FOLDER)) {
+                                    lstrcpyW(m_szFolder, pszPath);
+                                }
+                            }
+                            CoTaskMemFree(pszPath);
+                        }
+                        psi->Release();
+                    }
+                }
+                psia->Release();
             }
         }
     }
@@ -262,18 +309,19 @@ STDMETHODIMP CShellExt::InvokeCommand(LPCMINVOKECOMMANDINFO lpcmi) {
     case CMD_COPY_HERE: {
         std::vector<std::wstring> files = BasketStore::ReadBasket();
         if (!files.empty() && m_szFolder[0] != L'\0') {
-            FileOps::CopyFilesToFolderAsync(files, m_szFolder);
+            FileOps::CopyFilesToFolderAsync(files, m_szFolder, true);
         }
         break;
     }
 
     case CMD_COPY_TO: {
         std::vector<std::wstring> files = BasketStore::ReadBasket();
+        bool fromBasket = !files.empty();
         if (files.empty()) files = GetSelectedFiles();
         if (!files.empty()) {
             std::wstring folder;
             if (FileOps::BrowseForFolder(lpcmi->hwnd, folder)) {
-                FileOps::CopyFilesToFolderAsync(files, folder);
+                FileOps::CopyFilesToFolderAsync(files, folder, fromBasket);
             }
         }
         break;
@@ -282,18 +330,19 @@ STDMETHODIMP CShellExt::InvokeCommand(LPCMINVOKECOMMANDINFO lpcmi) {
     case CMD_MOVE_HERE: {
         std::vector<std::wstring> files = BasketStore::ReadBasket();
         if (!files.empty() && m_szFolder[0] != L'\0') {
-            FileOps::MoveFilesToFolderAsync(files, m_szFolder);
+            FileOps::MoveFilesToFolderAsync(files, m_szFolder, true);
         }
         break;
     }
 
     case CMD_MOVE_TO: {
         std::vector<std::wstring> files = BasketStore::ReadBasket();
+        bool fromBasket = !files.empty();
         if (files.empty()) files = GetSelectedFiles();
         if (!files.empty()) {
             std::wstring folder;
             if (FileOps::BrowseForFolder(lpcmi->hwnd, folder)) {
-                FileOps::MoveFilesToFolderAsync(files, folder);
+                FileOps::MoveFilesToFolderAsync(files, folder, fromBasket);
             }
         }
         break;
@@ -360,15 +409,37 @@ STDMETHODIMP CShellExt::GetCommandString(UINT_PTR idCmd, UINT uFlags, UINT FAR* 
 //---------------------------------------------------------------------------
 std::vector<std::wstring> CShellExt::GetSelectedFiles() {
     std::vector<std::wstring> files;
-    if (!m_stgMedium.hGlobal) return files;
 
-    HDROP hDrop = (HDROP)m_stgMedium.hGlobal;
-    UINT count = DragQueryFileW(hDrop, (UINT)-1, NULL, 0);
+    // Primary: extract from HDROP
+    if (m_stgMedium.hGlobal) {
+        HDROP hDrop = (HDROP)m_stgMedium.hGlobal;
+        UINT count = DragQueryFileW(hDrop, (UINT)-1, NULL, 0);
+        for (UINT i = 0; i < count; i++) {
+            WCHAR szFile[MAX_PATH];
+            if (DragQueryFileW(hDrop, i, szFile, MAX_PATH) > 0) {
+                files.push_back(szFile);
+            }
+        }
+    }
 
-    for (UINT i = 0; i < count; i++) {
-        WCHAR szFile[MAX_PATH];
-        if (DragQueryFileW(hDrop, i, szFile, MAX_PATH) > 0) {
-            files.push_back(szFile);
+    // Fallback: IShellItemArray (e.g. nav pane folders)
+    if (files.empty() && m_pDataObj) {
+        IShellItemArray* psia = NULL;
+        if (SUCCEEDED(SHCreateShellItemArrayFromDataObject(m_pDataObj, IID_PPV_ARGS(&psia)))) {
+            DWORD count = 0;
+            psia->GetCount(&count);
+            for (DWORD i = 0; i < count; i++) {
+                IShellItem* psi = NULL;
+                if (SUCCEEDED(psia->GetItemAt(i, &psi))) {
+                    PWSTR pszPath = NULL;
+                    if (SUCCEEDED(psi->GetDisplayName(SIGDN_FILESYSPATH, &pszPath))) {
+                        files.push_back(pszPath);
+                        CoTaskMemFree(pszPath);
+                    }
+                    psi->Release();
+                }
+            }
+            psia->Release();
         }
     }
 

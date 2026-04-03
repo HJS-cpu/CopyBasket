@@ -26,7 +26,46 @@ struct DlgData {
     HWND hList;
     HWND hBtnRemove;
     HWND hBtnClose;
+    HWND hStatusBar;
+    int sortColumn;
+    bool sortAscending;
 };
+
+struct SortContext {
+    HWND hList;
+    int column;
+    bool ascending;
+};
+
+static int CALLBACK CompareItems(LPARAM lParam1, LPARAM lParam2, LPARAM lParamSort) {
+    SortContext* ctx = (SortContext*)lParamSort;
+    WCHAR sz1[MAX_PATH] = {}, sz2[MAX_PATH] = {};
+    ListView_GetItemText(ctx->hList, (int)lParam1, ctx->column, sz1, MAX_PATH);
+    ListView_GetItemText(ctx->hList, (int)lParam2, ctx->column, sz2, MAX_PATH);
+    int result = _wcsicmp(sz1, sz2);
+    return ctx->ascending ? result : -result;
+}
+
+static void SetHeaderSortArrow(HWND hList, int column, bool ascending) {
+    HWND hHeader = ListView_GetHeader(hList);
+    int count = Header_GetItemCount(hHeader);
+    for (int i = 0; i < count; i++) {
+        HDITEMW hdi = {};
+        hdi.mask = HDI_FORMAT;
+        Header_GetItem(hHeader, i, &hdi);
+        hdi.fmt &= ~(HDF_SORTUP | HDF_SORTDOWN);
+        if (i == column) {
+            hdi.fmt |= ascending ? HDF_SORTUP : HDF_SORTDOWN;
+        }
+        Header_SetItem(hHeader, i, &hdi);
+    }
+}
+
+static void SortListView(DlgData* dd) {
+    SortContext ctx = { dd->hList, dd->sortColumn, dd->sortAscending };
+    ListView_SortItemsEx(dd->hList, CompareItems, (LPARAM)&ctx);
+    SetHeaderSortArrow(dd->hList, dd->sortColumn, dd->sortAscending);
+}
 
 static DWORD RegReadDword(const WCHAR* name, DWORD def) {
     DWORD val = def;
@@ -80,6 +119,14 @@ static void PopulateListView(HWND hList, const std::vector<std::wstring>& files)
     }
 }
 
+static void UpdateStatusBar(DlgData* dd) {
+    if (!dd->hStatusBar) return;
+    int count = ListView_GetItemCount(dd->hList);
+    WCHAR szText[64] = {};
+    swprintf(szText, 64, GetStrings().DlgStatusFiles, count);
+    SendMessageW(dd->hStatusBar, SB_SETTEXTW, 0, (LPARAM)szText);
+}
+
 static void RemoveSelected(HWND hList) {
     std::vector<std::wstring> remaining;
     int count = ListView_GetItemCount(hList);
@@ -108,9 +155,31 @@ static void LayoutControls(HWND hwnd, DlgData* dd) {
     int btnH = 28;
     int margin = 8;
 
-    MoveWindow(dd->hList, margin, margin, w - 2 * margin, h - btnH - 3 * margin, TRUE);
-    MoveWindow(dd->hBtnRemove, w - 2 * btnW - 2 * margin, h - btnH - margin, btnW, btnH, TRUE);
-    MoveWindow(dd->hBtnClose, w - btnW - margin, h - btnH - margin, btnW, btnH, TRUE);
+    // Status bar auto-positions itself at the bottom
+    int sbHeight = 0;
+    if (dd->hStatusBar) {
+        SendMessageW(dd->hStatusBar, WM_SIZE, 0, 0);
+        RECT sbRect;
+        GetWindowRect(dd->hStatusBar, &sbRect);
+        sbHeight = sbRect.bottom - sbRect.top;
+    }
+
+    int contentH = h - sbHeight;
+
+    HDWP hdwp = BeginDeferWindowPos(3);
+    if (hdwp) {
+        hdwp = DeferWindowPos(hdwp, dd->hList, NULL,
+            margin, margin, w - 2 * margin, contentH - btnH - 3 * margin,
+            SWP_NOZORDER | SWP_NOACTIVATE);
+        hdwp = DeferWindowPos(hdwp, dd->hBtnRemove, NULL,
+            w - 2 * btnW - 2 * margin, contentH - btnH - margin, btnW, btnH,
+            SWP_NOZORDER | SWP_NOACTIVATE);
+        hdwp = DeferWindowPos(hdwp, dd->hBtnClose, NULL,
+            w - btnW - margin, contentH - btnH - margin, btnW, btnH,
+            SWP_NOZORDER | SWP_NOACTIVATE);
+        EndDeferWindowPos(hdwp);
+    }
+    InvalidateRect(hwnd, NULL, TRUE);
 }
 
 static LRESULT CALLBACK DlgWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
@@ -163,9 +232,17 @@ static LRESULT CALLBACK DlgWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lP
         SendMessage(dd->hBtnRemove, WM_SETFONT, (WPARAM)hFont, TRUE);
         SendMessage(dd->hBtnClose, WM_SETFONT, (WPARAM)hFont, TRUE);
 
+        // Status bar
+        dd->hStatusBar = CreateWindowExW(
+            0, STATUSCLASSNAMEW, nullptr,
+            WS_CHILD | WS_VISIBLE | SBARS_SIZEGRIP,
+            0, 0, 0, 0,
+            hwnd, nullptr, GetModuleHandle(NULL), nullptr);
+
         // Populate
         std::vector<std::wstring> files = BasketStore::ReadBasket();
         PopulateListView(dd->hList, files);
+        UpdateStatusBar(dd);
 
         LayoutControls(hwnd, dd);
 
@@ -205,7 +282,7 @@ static LRESULT CALLBACK DlgWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lP
 
     case WM_COMMAND:
         if (LOWORD(wParam) == IDC_REMOVE) {
-            if (dd) RemoveSelected(dd->hList);
+            if (dd) { RemoveSelected(dd->hList); UpdateStatusBar(dd); }
         } else if (LOWORD(wParam) == IDC_CLOSE || LOWORD(wParam) == IDCANCEL) {
             DestroyWindow(hwnd);
         }
@@ -213,10 +290,24 @@ static LRESULT CALLBACK DlgWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lP
 
     case WM_NOTIFY: {
         NMHDR* nm = (NMHDR*)lParam;
-        if (nm->idFrom == IDC_LISTVIEW && nm->code == LVN_KEYDOWN) {
-            NMLVKEYDOWN* kd = (NMLVKEYDOWN*)lParam;
-            if (kd->wVKey == VK_DELETE && dd) {
-                RemoveSelected(dd->hList);
+        if (nm->idFrom == IDC_LISTVIEW) {
+            if (nm->code == LVN_KEYDOWN) {
+                NMLVKEYDOWN* kd = (NMLVKEYDOWN*)lParam;
+                if (kd->wVKey == VK_DELETE && dd) {
+                    RemoveSelected(dd->hList);
+                    UpdateStatusBar(dd);
+                } else if (kd->wVKey == 'A' && (GetKeyState(VK_CONTROL) & 0x8000)) {
+                    ListView_SetItemState(dd->hList, -1, LVIS_SELECTED, LVIS_SELECTED);
+                }
+            } else if (nm->code == LVN_COLUMNCLICK && dd) {
+                NMLISTVIEW* nlv = (NMLISTVIEW*)lParam;
+                if (nlv->iSubItem == dd->sortColumn) {
+                    dd->sortAscending = !dd->sortAscending;
+                } else {
+                    dd->sortColumn = nlv->iSubItem;
+                    dd->sortAscending = true;
+                }
+                SortListView(dd);
             }
         }
         return 0;
@@ -272,6 +363,7 @@ void Show(HWND hwndParent) {
 
     ShowWindow(hwnd, SW_SHOW);
     UpdateWindow(hwnd);
+    SetFocus(dd.hList);
 
     MSG msg;
     while (GetMessage(&msg, NULL, 0, 0)) {

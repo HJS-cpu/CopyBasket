@@ -40,6 +40,7 @@ static const StringTable s_DE = {
     L"Pfad",
     L"Entfernen",
     L"Schlie\u00DFen",
+    L"%d Dateien",
 
     // File operations
     L"Zielordner w\u00E4hlen",
@@ -93,6 +94,7 @@ static const StringTable s_EN = {
     L"Path",
     L"Remove",
     L"Close",
+    L"%d files",
 
     // File operations
     L"Choose destination folder",

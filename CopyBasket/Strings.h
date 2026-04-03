@@ -42,6 +42,7 @@ struct StringTable {
     const wchar_t* DlgColPath;
     const wchar_t* DlgBtnRemove;
     const wchar_t* DlgBtnClose;
+    const wchar_t* DlgStatusFiles;
 
     // File operations
     const wchar_t* BrowseTitle;
