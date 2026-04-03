@@ -17,11 +17,12 @@ A Windows Explorer shell extension that lets you collect files into a virtual "b
 | **Copy & Move** | Copy or move basket contents to the current folder or a chosen directory |
 | **Copy Path** | Copy selected file/folder paths to the clipboard |
 | **Browse Dialog** | Choose a target folder via modern IFileDialog |
-| **Basket Viewer** | ListView dialog with file name and full path columns, remove individual items |
+| **Basket Viewer** | ListView dialog with sortable columns, statusbar, Ctrl+A selection, and remove function |
 | **Direct Operations** | "Copy to..." / "Move to..." work on selected files when the basket is empty |
-| **Async File Ops** | All copy/move operations run on a background thread — Explorer stays responsive |
+| **Async File Ops** | All copy/move operations run on a background thread via IFileOperation — Explorer stays responsive |
+| **Smart Basket** | Only successfully processed files are removed from the basket — partial failures keep remaining items |
+| **Navigation Pane** | Works with items selected in the Explorer navigation pane and virtual folders |
 | **i18n** | German and English UI, switchable via Settings dialog |
-| **Auto-Clear** | Basket is automatically cleared after a successful operation |
 
 ---
 
@@ -119,7 +120,7 @@ Output:
 CopyBasket is a COM DLL implementing `IShellExtInit` and `IContextMenu`. It registers as a context menu handler for files, directories, and the directory background.
 
 - **Basket Storage:** `%APPDATA%\CopyBasket\basket.txt` (UTF-16LE with BOM)
-- **File Operations:** `SHFileOperationW` on a background thread (`_beginthreadex`)
+- **File Operations:** `IFileOperation` with `CFileOperationProgressSink` on a background thread (`_beginthreadex`)
 - **Settings:** Language preference stored in `HKCU\Software\CopyBasket`
 - **Dialog Persistence:** Window size and column widths saved in Registry
 
@@ -132,6 +133,17 @@ This project is provided as-is. See the [LICENSE](LICENSE) file for details.
 ---
 
 ## 📝 Changelog
+
+### v1.3.0
+- Migrated file operations from `SHFileOperationW` to modern `IFileOperation` API with `CFileOperationProgressSink`
+- Smart basket tracking: only successfully copied/moved files are removed, partial failures keep remaining items
+- Navigation pane and virtual folder support via `IShellItemArray` fallback
+- Right-click on a single folder uses it as target directory for "Copy/Move Basket Here"
+- BrowseForFolder dialog re-entrance guard prevents duplicate dialogs
+- Basket dialog: statusbar with file count, sortable columns with sort arrows, Ctrl+A to select all, initial keyboard focus
+- Basket dialog: deferred window positioning (`BeginDeferWindowPos`) for smooth resizing
+- Installer uninstaller now removes `%APPDATA%\CopyBasket` user data
+- CB-CMT: "Delete User Settings" checkbox for cleaning up registry and AppData
 
 ### v1.1.0
 - NSIS Installer with automatic `regsvr32` registration/unregistration
