@@ -31,18 +31,34 @@ jobs:
       - name: Build CB-CMT (regsvr Tool)
         run: msbuild "regsvr Tool\CopyBasketContextMenu.sln" /p:Configuration=Release /p:Platform=x64 /verbosity:minimal
 
-      - name: Create build directory
+      - name: Install NSIS
         shell: pwsh
-        run: New-Item -ItemType Directory -Path build -Force | Out-Null
+        run: |
+          Write-Host "Downloading NSIS 3.10 installer..."
+          $url = "https://downloads.sourceforge.net/project/nsis/NSIS%203/3.10/nsis-3.10-setup.exe"
+          $installer = Join-Path $env:RUNNER_TEMP "nsis-setup.exe"
+          Invoke-WebRequest -Uri $url -OutFile $installer -UseBasicParsing -MaximumRedirection 10 -Headers @{ "User-Agent" = "Mozilla/5.0" }
+
+          Write-Host "Installer size: $((Get-Item $installer).Length) bytes"
+          Write-Host "Running NSIS installer silently..."
+          Start-Process -FilePath $installer -ArgumentList "/S" -Wait -NoNewWindow
+
+          $makensis = "${env:ProgramFiles(x86)}\NSIS\makensis.exe"
+          if (-not (Test-Path $makensis)) {
+            throw "NSIS installation failed — makensis.exe not found at $makensis"
+          }
+          Write-Host "NSIS ready at: $makensis"
+          "NSIS_PATH=$makensis" | Out-File -FilePath $env:GITHUB_ENV -Append
 
       - name: Build Installer
-        uses: joncloud/makensis-action@v4.1
-        with:
-          script-file: installer/CopyBasket.nsi
-
-      - name: Verify installer output
         shell: pwsh
-        run: Get-ChildItem build\CopyBasket-*-setup.exe
+        run: |
+          New-Item -ItemType Directory -Path build -Force | Out-Null
+          Push-Location installer
+          & "$env:NSIS_PATH" CopyBasket.nsi
+          if ($LASTEXITCODE -ne 0) { throw "NSIS build failed with exit code $LASTEXITCODE" }
+          Pop-Location
+          Get-ChildItem build\CopyBasket-*-setup.exe
 
       - name: Prepare release assets
         run: |
