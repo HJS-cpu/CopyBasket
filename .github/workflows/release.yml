@@ -42,6 +42,9 @@ jobs:
           # Add scoop shims to PATH for this session
           $env:PATH = "$env:USERPROFILE\scoop\shims;$env:PATH"
 
+          Write-Host "Adding extras bucket..."
+          scoop bucket add extras
+
           Write-Host "Installing NSIS..."
           scoop install nsis
 
