@@ -30,6 +30,9 @@ ipch/
 desktop.ini
 Thumbs.db
 
+# Local archive folder (not for upload)
+\[Ressourcen\]/
+
 # Claude
 CLAUDE.md
 .claude/
