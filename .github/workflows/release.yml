@@ -31,46 +31,18 @@ jobs:
       - name: Build CB-CMT (regsvr Tool)
         run: msbuild "regsvr Tool\CopyBasketContextMenu.sln" /p:Configuration=Release /p:Platform=x64 /verbosity:minimal
 
-      - name: Build Installer
+      - name: Create build directory
         shell: pwsh
-        run: |
-          New-Item -ItemType Directory -Path build -Force | Out-Null
+        run: New-Item -ItemType Directory -Path build -Force | Out-Null
 
-          # Look for a pre-installed NSIS first (windows-latest ships with it)
-          $candidates = @(
-            "${env:ProgramFiles(x86)}\NSIS\makensis.exe",
-            "${env:ProgramFiles}\NSIS\makensis.exe",
-            "C:\Program Files (x86)\NSIS\makensis.exe",
-            "C:\Program Files\NSIS\makensis.exe"
-          )
-          $makensis = $candidates | Where-Object { Test-Path $_ } | Select-Object -First 1
+      - name: Build Installer
+        uses: joncloud/makensis-action@v4.1
+        with:
+          script-file: installer/CopyBasket.nsi
 
-          # Also try PATH as a final attempt
-          if (-not $makensis) {
-            $cmd = Get-Command makensis.exe -ErrorAction SilentlyContinue
-            if ($cmd) { $makensis = $cmd.Source }
-          }
-
-          # Last-resort fallback: download NSIS portable archive
-          if (-not $makensis) {
-            Write-Host "NSIS not found locally — downloading portable archive..."
-            $url = "https://downloads.sourceforge.net/project/nsis/NSIS%203/3.10/nsis-3.10.zip"
-            Invoke-WebRequest -Uri $url -OutFile nsis.zip -UseBasicParsing
-            Expand-Archive -Path nsis.zip -DestinationPath nsis-dist -Force
-            $makensis = (Get-ChildItem -Path nsis-dist -Recurse -Filter makensis.exe | Select-Object -First 1).FullName
-          }
-
-          if (-not $makensis) {
-            throw "makensis.exe could not be located or installed."
-          }
-
-          Write-Host "Using NSIS at: $makensis"
-          Push-Location installer
-          & $makensis CopyBasket.nsi
-          if ($LASTEXITCODE -ne 0) { throw "NSIS build failed with exit code $LASTEXITCODE" }
-          Pop-Location
-
-          Get-ChildItem build\CopyBasket-*-setup.exe
+      - name: Verify installer output
+        shell: pwsh
+        run: Get-ChildItem build\CopyBasket-*-setup.exe
 
       - name: Prepare release assets
         run: |
