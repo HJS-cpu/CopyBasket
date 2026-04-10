@@ -4,16 +4,22 @@
 
 namespace BasketStore {
 
-static std::wstring GetBasketFilePath() {
+std::wstring GetBasketDirPath() {
     WCHAR szAppData[MAX_PATH];
     if (SUCCEEDED(SHGetFolderPathW(NULL, CSIDL_APPDATA, NULL, 0, szAppData))) {
         std::wstring path(szAppData);
         path += L"\\CopyBasket";
         CreateDirectoryW(path.c_str(), NULL);
-        path += L"\\basket.txt";
+        path += L"\\";
         return path;
     }
     return L"";
+}
+
+static std::wstring GetBasketFilePath() {
+    std::wstring dir = GetBasketDirPath();
+    if (dir.empty()) return L"";
+    return dir + L"basket.txt";
 }
 
 void AddFiles(const std::vector<std::wstring>& files) {

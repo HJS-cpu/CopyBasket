@@ -39,7 +39,10 @@ struct StringTable {
     // Basket dialog
     const wchar_t* DlgBasketTitle;
     const wchar_t* DlgColFilename;
+    const wchar_t* DlgColType;
     const wchar_t* DlgColPath;
+    const wchar_t* DlgTypeFile;
+    const wchar_t* DlgTypeFolder;
     const wchar_t* DlgBtnRemove;
     const wchar_t* DlgBtnClose;
     const wchar_t* DlgStatusFiles;
@@ -54,6 +57,20 @@ struct StringTable {
     const wchar_t* SettingsCancel;
     const wchar_t* SettingsTabLanguage;
     const wchar_t* SettingsTabAbout;
+
+    // Abort notification dialog
+    const wchar_t* AbortTitle;
+    const wchar_t* AbortMsgFmt;
+    const wchar_t* AbortBtnOpenLog;
+    const wchar_t* AbortBtnClose;
+
+    // Operation log
+    const wchar_t* LogOpCopy;
+    const wchar_t* LogOpMove;
+    const wchar_t* LogTarget;
+    const wchar_t* LogAborted;
+    const wchar_t* LogSucceeded;
+    const wchar_t* LogFailed;
 };
 
 const StringTable& GetStrings();

@@ -17,7 +17,10 @@ A Windows Explorer shell extension that lets you collect files into a virtual "b
 | **Copy & Move** | Copy or move basket contents to the current folder or a chosen directory |
 | **Copy Path** | Copy selected file/folder paths to the clipboard |
 | **Browse Dialog** | Choose a target folder via modern IFileDialog |
-| **Basket Viewer** | ListView dialog with sortable columns, statusbar, Ctrl+A selection, and remove function |
+| **Basket Viewer** | ListView with native Windows icons, sortable columns (Name / Type / Path), statusbar, Ctrl+A, remove function |
+| **Directory Preview** | TreeView panel shows the full recursive contents of the selected basket entry, with real Explorer icons |
+| **Resizable Split** | Adjustable splitter between ListView and TreeView — saved across sessions |
+| **Incident Log** | Aborted or incomplete operations are logged in detail and surfaced via a TaskDialog with "Open Log" button |
 | **Direct Operations** | "Copy to..." / "Move to..." work on selected files when the basket is empty |
 | **Async File Ops** | All copy/move operations run on a background thread via IFileOperation — Explorer stays responsive |
 | **Smart Basket** | Only successfully processed files are removed from the basket — partial failures keep remaining items |
@@ -120,9 +123,12 @@ Output:
 CopyBasket is a COM DLL implementing `IShellExtInit` and `IContextMenu`. It registers as a context menu handler for files, directories, and the directory background.
 
 - **Basket Storage:** `%APPDATA%\CopyBasket\basket.txt` (UTF-16LE with BOM)
+- **Incident Log:** `%APPDATA%\CopyBasket\operations.log` (rewritten per incident, only on abort/partial failure)
 - **File Operations:** `IFileOperation` with `CFileOperationProgressSink` on a background thread (`_beginthreadex`)
+- **Reliable Logging:** Pre-scan + post-check via filesystem verification — works for deeply nested directory trees regardless of IFileOperation callback behaviour
+- **Icons:** Shared Windows system image list via `SHGetFileInfoW(SHGFI_SYSICONINDEX)` attached to both ListView and TreeView
 - **Settings:** Language preference stored in `HKCU\Software\CopyBasket`
-- **Dialog Persistence:** Window size and column widths saved in Registry
+- **Dialog Persistence:** Window size, column widths, and split ratio saved in Registry
 
 ---
 
@@ -133,6 +139,17 @@ This project is provided as-is. See the [LICENSE](LICENSE) file for details.
 ---
 
 ## 📝 Changelog
+
+### v1.4.0
+- **Basket dialog: TreeView detail panel** — shows the full recursive contents of the selected basket entry (folders and all nested files), read-only
+- **Resizable splitter** between ListView and TreeView, with min-pane constraints; split ratio persisted in Registry (`SplitRatio`)
+- **Native Windows system icons** in both ListView and TreeView — shared `SHGetFileInfoW` image list, matches Explorer's icons exactly (folders, `.txt`, `.exe`, custom app icons, etc.)
+- **New "Type" column** in the basket ListView between Name and Path (shows "File" / "Folder"), with its own persisted width (`ColWidth2`)
+- **Incident log for aborted / failed operations:**
+  - Detailed log written to `%APPDATA%\CopyBasket\operations.log` (UTF-16LE, rewritten per incident)
+  - Pre-scan + filesystem post-check — reliable even when moving deeply nested directory trees across volumes
+  - `TaskDialogIndirect` notification with **"Open Log"** button showing how many files were not processed
+  - Log is silent during normal operations; only appears when something actually went wrong
 
 ### v1.3.0
 - Migrated file operations from `SHFileOperationW` to modern `IFileOperation` API with `CFileOperationProgressSink`

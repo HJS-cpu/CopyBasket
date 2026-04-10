@@ -1,5 +1,6 @@
 #include <windows.h>
 #include <commctrl.h>
+#include <shellapi.h>
 #include <string>
 #include <vector>
 #include "BasketDialog.h"
@@ -14,21 +15,30 @@ extern HINSTANCE g_hModule;
 namespace BasketDialog {
 
 static const WCHAR* WND_CLASS = L"CopyBasketDlg";
+static const WCHAR* SPLITTER_CLASS = L"CopyBasketSplitter";
 static const int IDC_LISTVIEW = 1001;
 static const int IDC_REMOVE = 1002;
 static const int IDC_CLOSE = 1003;
+static const int IDC_TREEVIEW = 1004;
+static const int IDC_SPLITTER = 1005;
 static const int MIN_WIDTH = 450;
-static const int MIN_HEIGHT = 300;
+static const int MIN_HEIGHT = 400;
+static const int SPLITTER_H = 6;
+static const int MIN_PANE_H = 60;
 
 static const WCHAR* REG_KEY = L"Software\\CopyBasket";
 
 struct DlgData {
     HWND hList;
+    HWND hTree;
+    HWND hSplitter;
     HWND hBtnRemove;
     HWND hBtnClose;
     HWND hStatusBar;
     int sortColumn;
     bool sortAscending;
+    int splitRatioPct;  // list portion of split (10-90)
+    std::wstring lastTreePath;  // avoid redundant repopulation
 };
 
 struct SortContext {
@@ -91,31 +101,160 @@ static void SaveDialogState(HWND hwnd, DlgData* dd) {
         if (dd->hList) {
             RegWriteDword(hKey, L"ColWidth0", ListView_GetColumnWidth(dd->hList, 0));
             RegWriteDword(hKey, L"ColWidth1", ListView_GetColumnWidth(dd->hList, 1));
+            RegWriteDword(hKey, L"ColWidth2", ListView_GetColumnWidth(dd->hList, 2));
         }
+        RegWriteDword(hKey, L"SplitRatio", (DWORD)dd->splitRatioPct);
         RegCloseKey(hKey);
     }
 }
 
+static int GetSysIconIndex(const std::wstring& path) {
+    SHFILEINFOW sfi = {};
+    if (SHGetFileInfoW(path.c_str(), 0, &sfi, sizeof(sfi),
+                       SHGFI_SYSICONINDEX | SHGFI_SMALLICON)) {
+        return sfi.iIcon;
+    }
+    return 0;
+}
+
+static void AddTreeNodes(HWND hTree, HTREEITEM hParent, const std::wstring& dir) {
+    std::wstring pattern = dir + L"\\*";
+    WIN32_FIND_DATAW fd;
+    HANDLE hFind = FindFirstFileW(pattern.c_str(), &fd);
+    if (hFind == INVALID_HANDLE_VALUE) return;
+
+    // Collect directories and files separately for stable ordering
+    std::vector<std::wstring> dirs, files;
+    do {
+        if (wcscmp(fd.cFileName, L".") == 0 || wcscmp(fd.cFileName, L"..") == 0) continue;
+        if (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
+            dirs.push_back(fd.cFileName);
+        else
+            files.push_back(fd.cFileName);
+    } while (FindNextFileW(hFind, &fd));
+    FindClose(hFind);
+
+    // Directories first (recursive)
+    for (const auto& name : dirs) {
+        std::wstring childPath = dir + L"\\" + name;
+        int icon = GetSysIconIndex(childPath);
+        TVINSERTSTRUCTW tvi = {};
+        tvi.hParent = hParent;
+        tvi.hInsertAfter = TVI_LAST;
+        tvi.item.mask = TVIF_TEXT | TVIF_IMAGE | TVIF_SELECTEDIMAGE;
+        tvi.item.pszText = (LPWSTR)name.c_str();
+        tvi.item.iImage = icon;
+        tvi.item.iSelectedImage = icon;
+        HTREEITEM hItem = TreeView_InsertItem(hTree, &tvi);
+        AddTreeNodes(hTree, hItem, childPath);
+    }
+    // Then files
+    for (const auto& name : files) {
+        std::wstring childPath = dir + L"\\" + name;
+        int icon = GetSysIconIndex(childPath);
+        TVINSERTSTRUCTW tvi = {};
+        tvi.hParent = hParent;
+        tvi.hInsertAfter = TVI_LAST;
+        tvi.item.mask = TVIF_TEXT | TVIF_IMAGE | TVIF_SELECTEDIMAGE;
+        tvi.item.pszText = (LPWSTR)name.c_str();
+        tvi.item.iImage = icon;
+        tvi.item.iSelectedImage = icon;
+        TreeView_InsertItem(hTree, &tvi);
+    }
+}
+
+static void PopulateTreeFromPath(HWND hTree, const std::wstring& path) {
+    SendMessage(hTree, WM_SETREDRAW, FALSE, 0);
+    TreeView_DeleteAllItems(hTree);
+
+    DWORD attr = GetFileAttributesW(path.c_str());
+    if (attr != INVALID_FILE_ATTRIBUTES && (attr & FILE_ATTRIBUTE_DIRECTORY)) {
+        // Root node = directory name
+        std::wstring name = path;
+        size_t lastSlash = path.find_last_of(L"\\/");
+        if (lastSlash != std::wstring::npos) {
+            name = path.substr(lastSlash + 1);
+        }
+
+        int rootIcon = GetSysIconIndex(path);
+        TVINSERTSTRUCTW tvi = {};
+        tvi.hParent = TVI_ROOT;
+        tvi.hInsertAfter = TVI_LAST;
+        tvi.item.mask = TVIF_TEXT | TVIF_IMAGE | TVIF_SELECTEDIMAGE;
+        tvi.item.pszText = (LPWSTR)name.c_str();
+        tvi.item.iImage = rootIcon;
+        tvi.item.iSelectedImage = rootIcon;
+        HTREEITEM hRoot = TreeView_InsertItem(hTree, &tvi);
+
+        AddTreeNodes(hTree, hRoot, path);
+        TreeView_Expand(hTree, hRoot, TVE_EXPAND);
+    }
+
+    SendMessage(hTree, WM_SETREDRAW, TRUE, 0);
+    InvalidateRect(hTree, NULL, TRUE);
+}
+
+static void UpdateTreeForSelection(DlgData* dd) {
+    if (!dd || !dd->hTree) return;
+
+    int sel = ListView_GetNextItem(dd->hList, -1, LVNI_SELECTED | LVNI_FOCUSED);
+    if (sel < 0) sel = ListView_GetNextItem(dd->hList, -1, LVNI_SELECTED);
+
+    std::wstring path;
+    if (sel >= 0) {
+        WCHAR szPath[MAX_PATH] = {};
+        ListView_GetItemText(dd->hList, sel, 2, szPath, MAX_PATH);
+        path = szPath;
+    }
+
+    if (path == dd->lastTreePath) return;  // no change → avoid flicker
+    dd->lastTreePath = path;
+
+    PopulateTreeFromPath(dd->hTree, path);
+}
+
 static void PopulateListView(HWND hList, const std::vector<std::wstring>& files) {
     ListView_DeleteAllItems(hList);
+    const StringTable& S = GetStrings();
     for (int i = 0; i < (int)files.size(); i++) {
         const std::wstring& path = files[i];
 
-        // Split into filename (column 0) and full path (column 1)
+        // Extract filename (last path component)
         std::wstring name = path;
         size_t pos = path.rfind(L'\\');
         if (pos != std::wstring::npos) {
             name = path.substr(pos + 1);
         }
 
+        // Determine type (file or folder)
+        DWORD attr = GetFileAttributesW(path.c_str());
+        const wchar_t* typeText = S.DlgTypeFile;
+        if (attr != INVALID_FILE_ATTRIBUTES && (attr & FILE_ATTRIBUTE_DIRECTORY)) {
+            typeText = S.DlgTypeFolder;
+        }
+
+        // Query the system icon index for this path (matches Explorer's icon).
+        // Falls back to extension-based lookup if the file no longer exists.
+        SHFILEINFOW sfi = {};
+        if (!SHGetFileInfoW(path.c_str(), 0, &sfi, sizeof(sfi),
+                            SHGFI_SYSICONINDEX | SHGFI_SMALLICON)) {
+            DWORD fallbackAttr = (attr != INVALID_FILE_ATTRIBUTES && (attr & FILE_ATTRIBUTE_DIRECTORY))
+                                     ? FILE_ATTRIBUTE_DIRECTORY
+                                     : FILE_ATTRIBUTE_NORMAL;
+            SHGetFileInfoW(path.c_str(), fallbackAttr, &sfi, sizeof(sfi),
+                           SHGFI_SYSICONINDEX | SHGFI_SMALLICON | SHGFI_USEFILEATTRIBUTES);
+        }
+
         LVITEMW lvi = {};
-        lvi.mask = LVIF_TEXT;
+        lvi.mask = LVIF_TEXT | LVIF_IMAGE;
         lvi.iItem = i;
         lvi.iSubItem = 0;
         lvi.pszText = (LPWSTR)name.c_str();
+        lvi.iImage = sfi.iIcon;
         ListView_InsertItem(hList, &lvi);
 
-        ListView_SetItemText(hList, i, 1, (LPWSTR)path.c_str());
+        ListView_SetItemText(hList, i, 1, (LPWSTR)typeText);
+        ListView_SetItemText(hList, i, 2, (LPWSTR)path.c_str());
     }
 }
 
@@ -136,7 +275,7 @@ static void RemoveSelected(HWND hList) {
             continue;
 
         WCHAR szPath[MAX_PATH] = {};
-        ListView_GetItemText(hList, i, 1, szPath, MAX_PATH);
+        ListView_GetItemText(hList, i, 2, szPath, MAX_PATH);
         if (szPath[0] != L'\0') {
             remaining.push_back(szPath);
         }
@@ -144,6 +283,67 @@ static void RemoveSelected(HWND hList) {
 
     BasketStore::WriteBasket(remaining);
     PopulateListView(hList, remaining);
+}
+
+static void LayoutControls(HWND hwnd, DlgData* dd);  // forward declaration
+
+static LRESULT CALLBACK SplitterWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
+    switch (msg) {
+    case WM_LBUTTONDOWN:
+        SetCapture(hwnd);
+        return 0;
+
+    case WM_MOUSEMOVE:
+        if (GetCapture() == hwnd) {
+            HWND hParent = GetParent(hwnd);
+            DlgData* dd = (DlgData*)GetWindowLongPtr(hParent, GWLP_USERDATA);
+            if (!dd) return 0;
+
+            // Convert mouse position (splitter-local) to parent client coords
+            POINT pt;
+            pt.x = (short)LOWORD(lParam);
+            pt.y = (short)HIWORD(lParam);
+            ClientToScreen(hwnd, &pt);
+            ScreenToClient(hParent, &pt);
+
+            // Recompute layout constants (must match LayoutControls)
+            RECT rc;
+            GetClientRect(hParent, &rc);
+            int sbHeight = 0;
+            if (dd->hStatusBar) {
+                RECT sbRect;
+                GetWindowRect(dd->hStatusBar, &sbRect);
+                sbHeight = sbRect.bottom - sbRect.top;
+            }
+            int btnH = 28;
+            int margin = 8;
+            int contentH = rc.bottom - sbHeight;
+            int availH = contentH - btnH - 3 * margin - SPLITTER_H;
+            if (availH < 2 * MIN_PANE_H) return 0;
+
+            // pt.y is where the splitter's top edge should be (in parent coords)
+            int newListH = pt.y - margin;
+            if (newListH < MIN_PANE_H) newListH = MIN_PANE_H;
+            if (newListH > availH - MIN_PANE_H) newListH = availH - MIN_PANE_H;
+
+            int newRatio = newListH * 100 / availH;
+            if (newRatio < 10) newRatio = 10;
+            if (newRatio > 90) newRatio = 90;
+
+            if (newRatio != dd->splitRatioPct) {
+                dd->splitRatioPct = newRatio;
+                LayoutControls(hParent, dd);
+            }
+        }
+        return 0;
+
+    case WM_LBUTTONUP:
+        if (GetCapture() == hwnd) {
+            ReleaseCapture();
+        }
+        return 0;
+    }
+    return DefWindowProcW(hwnd, msg, wParam, lParam);
 }
 
 static void LayoutControls(HWND hwnd, DlgData* dd) {
@@ -165,11 +365,24 @@ static void LayoutControls(HWND hwnd, DlgData* dd) {
     }
 
     int contentH = h - sbHeight;
+    int availH = contentH - btnH - 3 * margin - SPLITTER_H;  // list + tree + gap before buttons
+    if (availH < 2 * MIN_PANE_H) availH = 2 * MIN_PANE_H;
 
-    HDWP hdwp = BeginDeferWindowPos(3);
+    int listH = availH * dd->splitRatioPct / 100;
+    if (listH < MIN_PANE_H) listH = MIN_PANE_H;
+    if (listH > availH - MIN_PANE_H) listH = availH - MIN_PANE_H;
+    int treeH = availH - listH;
+
+    HDWP hdwp = BeginDeferWindowPos(5);
     if (hdwp) {
         hdwp = DeferWindowPos(hdwp, dd->hList, NULL,
-            margin, margin, w - 2 * margin, contentH - btnH - 3 * margin,
+            margin, margin, w - 2 * margin, listH,
+            SWP_NOZORDER | SWP_NOACTIVATE);
+        hdwp = DeferWindowPos(hdwp, dd->hSplitter, NULL,
+            margin, margin + listH, w - 2 * margin, SPLITTER_H,
+            SWP_NOZORDER | SWP_NOACTIVATE);
+        hdwp = DeferWindowPos(hdwp, dd->hTree, NULL,
+            margin, margin + listH + SPLITTER_H, w - 2 * margin, treeH,
             SWP_NOZORDER | SWP_NOACTIVATE);
         hdwp = DeferWindowPos(hdwp, dd->hBtnRemove, NULL,
             w - 2 * btnW - 2 * margin, contentH - btnH - margin, btnW, btnH,
@@ -199,9 +412,20 @@ static LRESULT CALLBACK DlgWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lP
         ListView_SetExtendedListViewStyle(dd->hList,
             LVS_EX_FULLROWSELECT | LVS_EX_DOUBLEBUFFER);
 
+        // Fetch the shared system small-icon image list once — it's a shell
+        // global, so we can safely attach the same handle to both controls.
+        SHFILEINFOW sfiProbe = {};
+        HIMAGELIST hSysImgList = (HIMAGELIST)SHGetFileInfoW(
+            L"C:\\", 0, &sfiProbe, sizeof(sfiProbe),
+            SHGFI_SYSICONINDEX | SHGFI_SMALLICON);
+        if (hSysImgList) {
+            ListView_SetImageList(dd->hList, hSysImgList, LVSIL_SMALL);
+        }
+
         // Columns with saved widths
-        int col0w = (int)RegReadDword(L"ColWidth0", 240);
-        int col1w = (int)RegReadDword(L"ColWidth1", 320);
+        int col0w = (int)RegReadDword(L"ColWidth0", 220);
+        int col1w = (int)RegReadDword(L"ColWidth1", 90);
+        int col2w = (int)RegReadDword(L"ColWidth2", 320);
 
         LVCOLUMNW col = {};
         col.mask = LVCF_TEXT | LVCF_WIDTH | LVCF_SUBITEM;
@@ -211,9 +435,31 @@ static LRESULT CALLBACK DlgWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lP
         ListView_InsertColumn(dd->hList, 0, &col);
 
         col.cx = col1w;
-        col.pszText = (LPWSTR)GetStrings().DlgColPath;
+        col.pszText = (LPWSTR)GetStrings().DlgColType;
         col.iSubItem = 1;
         ListView_InsertColumn(dd->hList, 1, &col);
+
+        col.cx = col2w;
+        col.pszText = (LPWSTR)GetStrings().DlgColPath;
+        col.iSubItem = 2;
+        ListView_InsertColumn(dd->hList, 2, &col);
+
+        dd->hSplitter = CreateWindowExW(
+            0, SPLITTER_CLASS, L"",
+            WS_CHILD | WS_VISIBLE,
+            0, 0, 0, 0,
+            hwnd, (HMENU)(INT_PTR)IDC_SPLITTER, GetModuleHandle(NULL), NULL);
+
+        dd->hTree = CreateWindowExW(
+            WS_EX_CLIENTEDGE, WC_TREEVIEWW, L"",
+            WS_CHILD | WS_VISIBLE | WS_TABSTOP |
+            TVS_HASLINES | TVS_LINESATROOT | TVS_HASBUTTONS | TVS_SHOWSELALWAYS,
+            0, 0, 0, 0,
+            hwnd, (HMENU)(INT_PTR)IDC_TREEVIEW, GetModuleHandle(NULL), NULL);
+
+        if (hSysImgList) {
+            TreeView_SetImageList(dd->hTree, hSysImgList, TVSIL_NORMAL);
+        }
 
         dd->hBtnRemove = CreateWindowExW(
             0, L"BUTTON", GetStrings().DlgBtnRemove,
@@ -282,7 +528,11 @@ static LRESULT CALLBACK DlgWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lP
 
     case WM_COMMAND:
         if (LOWORD(wParam) == IDC_REMOVE) {
-            if (dd) { RemoveSelected(dd->hList); UpdateStatusBar(dd); }
+            if (dd) {
+                RemoveSelected(dd->hList);
+                UpdateStatusBar(dd);
+                UpdateTreeForSelection(dd);
+            }
         } else if (LOWORD(wParam) == IDC_CLOSE || LOWORD(wParam) == IDCANCEL) {
             DestroyWindow(hwnd);
         }
@@ -290,12 +540,20 @@ static LRESULT CALLBACK DlgWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lP
 
     case WM_NOTIFY: {
         NMHDR* nm = (NMHDR*)lParam;
+        if (nm->idFrom == IDC_TREEVIEW) {
+            // TreeView is a read-only viewer — never allow selection
+            if (nm->code == TVN_SELCHANGINGW) {
+                return TRUE;
+            }
+            return 0;
+        }
         if (nm->idFrom == IDC_LISTVIEW) {
             if (nm->code == LVN_KEYDOWN) {
                 NMLVKEYDOWN* kd = (NMLVKEYDOWN*)lParam;
                 if (kd->wVKey == VK_DELETE && dd) {
                     RemoveSelected(dd->hList);
                     UpdateStatusBar(dd);
+                    UpdateTreeForSelection(dd);
                 } else if (kd->wVKey == 'A' && (GetKeyState(VK_CONTROL) & 0x8000)) {
                     ListView_SetItemState(dd->hList, -1, LVIS_SELECTED, LVIS_SELECTED);
                 }
@@ -308,6 +566,12 @@ static LRESULT CALLBACK DlgWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lP
                     dd->sortAscending = true;
                 }
                 SortListView(dd);
+            } else if (nm->code == LVN_ITEMCHANGED && dd) {
+                NMLISTVIEW* nlv = (NMLISTVIEW*)lParam;
+                if ((nlv->uChanged & LVIF_STATE) &&
+                    ((nlv->uNewState & LVIS_SELECTED) || (nlv->uNewState & LVIS_FOCUSED))) {
+                    UpdateTreeForSelection(dd);
+                }
             }
         }
         return 0;
@@ -329,7 +593,7 @@ static LRESULT CALLBACK DlgWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lP
 void Show(HWND hwndParent) {
     INITCOMMONCONTROLSEX icex = {};
     icex.dwSize = sizeof(icex);
-    icex.dwICC = ICC_LISTVIEW_CLASSES;
+    icex.dwICC = ICC_LISTVIEW_CLASSES | ICC_TREEVIEW_CLASSES | ICC_BAR_CLASSES;
     InitCommonControlsEx(&icex);
 
     WNDCLASSW wc = {};
@@ -340,7 +604,18 @@ void Show(HWND hwndParent) {
     wc.lpszClassName = WND_CLASS;
     RegisterClassW(&wc);
 
+    WNDCLASSW wcSplit = {};
+    wcSplit.lpfnWndProc = SplitterWndProc;
+    wcSplit.hInstance = GetModuleHandle(NULL);
+    wcSplit.hCursor = LoadCursor(NULL, IDC_SIZENS);
+    wcSplit.hbrBackground = (HBRUSH)(COLOR_BTNFACE + 1);
+    wcSplit.lpszClassName = SPLITTER_CLASS;
+    RegisterClassW(&wcSplit);
+
     DlgData dd = {};
+    dd.splitRatioPct = (int)RegReadDword(L"SplitRatio", 60);
+    if (dd.splitRatioPct < 10) dd.splitRatioPct = 10;
+    if (dd.splitRatioPct > 90) dd.splitRatioPct = 90;
 
     // Load saved window size or use defaults
     int ww = (int)RegReadDword(L"DialogWidth", 620);
@@ -374,6 +649,7 @@ void Show(HWND hwndParent) {
     }
 
     UnregisterClassW(WND_CLASS, GetModuleHandle(NULL));
+    UnregisterClassW(SPLITTER_CLASS, GetModuleHandle(NULL));
 }
 
 } // namespace BasketDialog

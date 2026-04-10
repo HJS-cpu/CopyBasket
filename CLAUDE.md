@@ -29,7 +29,8 @@ regsvr32 /u x64\Release\CopyBasket.dll
 - **COM-Interfaces:** IShellExtInit + IContextMenu
 - **CLSID:** {F2D8A4E6-3B7C-4D1E-9F5A-8C6E2A4B0D12} (GUID.h)
 - **Korb-Speicher:** `%APPDATA%\CopyBasket\basket.txt` (UTF-16LE mit BOM)
-- **Dateioperationen:** IFileOperation + CFileOperationProgressSink (nicht-blockierend via Hintergrund-Thread, Korb-Entfernung gesammelt in FinishOperations)
+- **Incident-Log:** `%APPDATA%\CopyBasket\operations.log` (UTF-16LE mit BOM, **ueberschrieben** pro Incident)
+- **Dateioperationen:** IFileOperation + CFileOperationProgressSink (nicht-blockierend via Hintergrund-Thread, Korb-Entfernung gesammelt in FinishOperations). Bei Abbruch/Teilfehler wird via Pre-Scan/Post-Check ein Log geschrieben und TaskDialog angezeigt
 - **Thread-Sicherheit:** `g_cRef` als `volatile LONG` mit `InterlockedIncrement/Decrement`
 - **Datei-Erkennung:** Primaer CF_HDROP, Fallback via `SHCreateShellItemArrayFromDataObject` (fuer Navigationsbereich, virtuelle Ordner etc.) mit `SFGAO_FOLDER`-Pruefung fuer korrekte Ordner-Ziel-Erkennung
 
@@ -39,9 +40,9 @@ regsvr32 /u x64\Release\CopyBasket.dll
 |-------|--------|
 | CopyBasket.cpp | DllMain, COM Boilerplate, DllRegisterServer/DllUnregisterServer |
 | ShellExt.cpp | IShellExtInit::Initialize, IContextMenu (QueryContextMenu, InvokeCommand, GetCommandString) |
-| BasketStore.h/.cpp | Korb-Datei lesen/schreiben/leeren, Duplikat-Pruefung (GetBasketFilePath intern/static) |
-| FileOps.h/.cpp | IFileOperation + CFileOperationProgressSink (async, Korb-Update gesammelt in FinishOperations), BrowseForFolder (IFileDialog, mit Re-Entrance-Guard) |
-| BasketDialog.h/.cpp | ListView-Dialog fuer Korb-Inhalt mit Entfernen-Funktion |
+| BasketStore.h/.cpp | Korb-Datei lesen/schreiben/leeren, Duplikat-Pruefung. `GetBasketDirPath()` public (fuer Log-Pfad), `GetBasketFilePath()` intern/static |
+| FileOps.h/.cpp | IFileOperation + CFileOperationProgressSink (async, Korb-Update gesammelt in FinishOperations), BrowseForFolder (IFileDialog, mit Re-Entrance-Guard), Incident-Log via Pre-Scan/Post-Check, TaskDialog mit "Log oeffnen" |
+| BasketDialog.h/.cpp | ListView-Dialog mit TreeView-Detail-Panel, Splitter, System-Icons, Typ-Spalte, Entfernen-Funktion |
 | Strings.h/.cpp | i18n String-Tabellen (DE/EN), LoadLanguageSetting(), SaveLanguageSetting() |
 | SettingsDialog.h/.cpp | Einstellungen-Dialog mit Tab Control (Sprache / \u00DCber mit Website-Link) |
 | Version.h | Zentrale Versionskonstanten (COPYBASKET_VERSION_*) |
@@ -107,14 +108,53 @@ Das Hauptmenu-Item "CopyBasket" zeigt ein eigenes Icon:
 - **Nicht-modal:** Explorer bleibt bedienbar waehrend der Dialog offen ist
 - **Auto-Close:** Dialog schliesst sich bei Fokusverlust (WM_ACTIVATE/WA_INACTIVE)
 - **Fenster-Style:** Resizable, kein Minimize/Maximize (`WS_OVERLAPPEDWINDOW & ~(WS_MINIMIZEBOX | WS_MAXIMIZEBOX)`)
-- **Resize-Layout:** `LayoutControls()` verwendet `BeginDeferWindowPos`/`DeferWindowPos`/`EndDeferWindowPos` fuer atomares Repositionieren aller Child-Controls (ListView + Buttons) plus `InvalidateRect` fuer sauberes Neuzeichnen
+- **Layout:** Obere Haelfte ListView, darunter Splitter, darunter TreeView (Detail-Panel), darunter Buttons + Statusbar. `LayoutControls()` verwendet `BeginDeferWindowPos`/`DeferWindowPos`/`EndDeferWindowPos` fuer atomares Repositionieren aller Child-Controls
 - **Icon:** Basket-Icon in Titelleiste via `WM_SETICON` (ICON_SMALL + ICON_BIG, `LR_SHARED`)
-- **Persistenz:** Fenstergroesse und Spaltenbreiten werden in Registry gespeichert (`HKCU\Software\CopyBasket\DialogWidth/Height/ColWidth0/ColWidth1`)
-- **Pfad-Spalte:** Zweite Spalte zeigt den vollen Dateipfad (nicht nur den Ordner)
+- **Persistenz:** Fenstergroesse, Spaltenbreiten und Splitter-Position in Registry (`HKCU\Software\CopyBasket\DialogWidth/Height/ColWidth0/ColWidth1/ColWidth2/SplitRatio`)
+- **ListView-Spalten:** 0=Dateiname, 1=Typ ("Datei"/"Verzeichnis" via `GetFileAttributesW`), 2=voller Pfad
+- **System-Icons:** Shared Windows-Image-List via `SHGetFileInfoW(SHGFI_SYSICONINDEX | SHGFI_SMALLICON)` einmalig in WM_CREATE geholt, an ListView (`LVSIL_SMALL`) und TreeView (`TVSIL_NORMAL`) gehaengt. Pro Eintrag wird der Icon-Index gesetzt — Ordner, .txt, .exe usw. zeigen die echten Explorer-Icons. Keine Cleanup-Arbeiten (System-Image-List gehoert der Shell)
 - **Spalten-Sortierung:** Klick auf Spaltenueberschrift sortiert alphabetisch (case-insensitive via `_wcsicmp`), erneuter Klick kehrt Richtung um. Sortier-Pfeil im Header via `HDF_SORTUP`/`HDF_SORTDOWN` (natives Windows-Theme). Implementiert mit `ListView_SortItemsEx` und `LVN_COLUMNCLICK`
 - **Strg+A:** Selektiert alle Eintraege im ListView (via `LVN_KEYDOWN` + `ListView_SetItemState` mit Index -1)
 - **Initialer Fokus:** ListView erhaelt beim Oeffnen sofort den Fokus (`SetFocus` nach `ShowWindow`), sodass Tastaturkuerzel (Strg+A, Entf) direkt nutzbar sind
 - **Statusbar:** Native Windows-Statusbar (`STATUSCLASSNAMEW`) am unteren Fensterrand mit `SBARS_SIZEGRIP`. Zeigt Dateianzahl im Korb (z.B. "5 Dateien" / "5 files"). Aktualisiert sich automatisch beim Entfernen von Eintraegen. Layout wird in `LayoutControls()` beruecksichtigt (Statusbar-Hoehe von verfuegbarer Flaeche abgezogen)
+
+#### TreeView-Detail-Panel
+
+- **Zweck:** Bei Auswahl eines Verzeichnis-Eintrags in der ListView zeigt die TreeView dessen kompletten Inhalt rekursiv (inkl. Unterverzeichnisse)
+- **Read-Only:** TreeView ist reine Leseansicht. `TVN_SELCHANGINGW` wird abgefangen und gibt `TRUE` zurueck → keine Selektion moeglich. Remove-Button wirkt ausschliesslich auf ListView
+- **Populate:** `AddTreeNodes()` rekursiv via `FindFirstFileW`/`FindNextFileW`, Verzeichnisse zuerst, dann Dateien (stabile Sortierung). Jeder Knoten bekommt Icon via `GetSysIconIndex()` (`SHGetFileInfoW`)
+- **Update-Trigger:** `UpdateTreeForSelection()` wird bei `LVN_ITEMCHANGED` (LVIS_SELECTED/LVIS_FOCUSED), Remove und Delete-Key aufgerufen. Speichert letzten Pfad (`lastTreePath`) um redundantes Neupopulieren bei identischem Pfad zu vermeiden
+- **Flicker-Schutz:** `SendMessage(hTree, WM_SETREDRAW, FALSE/TRUE, 0)` um das Populieren
+- **Keine Auswahl → leer:** Bei keinem oder File-Eintrag zeigt die TreeView nichts
+
+#### Splitter zwischen ListView und TreeView
+
+- **Eigene Window-Klasse** `CopyBasketSplitter` (registriert in `Show()`, `UnregisterClassW` beim Ende) mit `IDC_SIZENS`-Cursor und `COLOR_BTNFACE`-Background
+- **Drag-Logik in `SplitterWndProc`:**
+  - `WM_LBUTTONDOWN` → `SetCapture(hwnd)`
+  - `WM_MOUSEMOVE` mit aktiver Capture → konvertiert Splitter-local zu Parent-Client-Koordinaten, berechnet neue Ratio, ruft `LayoutControls()` auf Parent
+  - `WM_LBUTTONUP` → `ReleaseCapture()`
+- **Ratio-Clamping:** 10–90% mit `MIN_PANE_H = 60` Pixel Mindesthoehe pro Pane
+- **Persistenz:** `splitRatioPct` (int, 10–90) wird in Registry als `SplitRatio` gespeichert
+
+### Incident-Log bei Abbruch/Teilfehler
+
+Bei Abbruch oder fehlgeschlagenen Dateioperationen (insbesondere beim Verschieben verschachtelter Verzeichnisse ueber Laufwerksgrenzen) wird ein Log geschrieben und ein Dialog gezeigt. Ziel: Der User sieht exakt, welche Dateien tatsaechlich verarbeitet wurden und welche nicht — auch fuer Dateien in Unterverzeichnissen.
+
+- **Strategie:** Pre-Scan + Post-Check statt Verlassen auf IFileOperation-Callbacks
+  - **Pre-Scan:** `BuildExpectedFiles()` + `EnumerateFilesRecursive()` enumeriert rekursiv alle Quelldateien mit berechnetem Ziel-Pfad (`struct ExpectedFile { sourcePath; destPath; }`)
+  - **Operation:** `IFileOperation::PerformOperations()` wie gehabt
+  - **Post-Check:** Nach `GetAnyOperationsAborted()` wird jede erwartete Datei via `GetFileAttributesW` geprueft — fuer MOVE gilt eine Datei als erfolgreich, wenn Quelle weg und Ziel existiert; fuer COPY wenn Ziel existiert
+- **Trigger:** `fAborted || !notProcessed.empty()`
+- **Log-Datei:** `%APPDATA%\CopyBasket\operations.log` (UTF-16LE mit BOM, `CREATE_ALWAYS` → wird pro Incident ueberschrieben, keine History)
+  - Inhalt: Zeitstempel, Operationstyp (KOPIEREN/VERSCHIEBEN), Zielordner, Liste "Erfolgreich:" + "Fehlgeschlagen:" + Status (ABGEBROCHEN falls zutreffend)
+  - i18n: Log-Strings via `StringTable` (LogOpCopy, LogOpMove, LogTarget, LogAborted, LogSucceeded, LogFailed)
+- **Abort-Dialog:** `TaskDialogIndirect` (Vista+, via `comctl32.lib`)
+  - Inhalt: "%d von %d Dateien wurden nicht verarbeitet. Details wurden protokolliert."
+  - Buttons: **"Log oeffnen"** (oeffnet Log-Datei via `ShellExecuteW`) und **"Schliessen"**
+  - Default-Button: "Schliessen"
+  - Icon: `TD_WARNING_ICON`
+- **CFileOperationProgressSink:** bleibt minimal — nur das urspruengliche Korb-Tracking. Das Logging passiert vollstaendig in `ExecuteFileOpCOM` per Filesystem-Check, damit es unabhaengig vom Callback-Verhalten zuverlaessig funktioniert
 
 ### Einstellungen-Dialog
 

@@ -37,7 +37,10 @@ static const StringTable s_DE = {
     // Basket dialog
     L"CopyBasket - Korb Inhalt",
     L"Dateiname",
+    L"Typ",
     L"Pfad",
+    L"Datei",
+    L"Verzeichnis",
     L"Entfernen",
     L"Schlie\u00DFen",
     L"%d Dateien",
@@ -52,6 +55,20 @@ static const StringTable s_DE = {
     L"Abbrechen",
     L"Sprache",
     L"\u00DCber",
+
+    // Abort notification dialog
+    L"Vorgang abgebrochen",
+    L"%d von %d Dateien wurden nicht verarbeitet.\nDetails wurden protokolliert.",
+    L"Log \u00F6ffnen",
+    L"Schlie\u00DFen",
+
+    // Operation log
+    L"KOPIEREN",
+    L"VERSCHIEBEN",
+    L"Ziel:",
+    L"ABGEBROCHEN",
+    L"Erfolgreich:",
+    L"Fehlgeschlagen:",
 };
 
 static const StringTable s_EN = {
@@ -91,7 +108,10 @@ static const StringTable s_EN = {
     // Basket dialog
     L"CopyBasket - Basket Contents",
     L"Filename",
+    L"Type",
     L"Path",
+    L"File",
+    L"Folder",
     L"Remove",
     L"Close",
     L"%d files",
@@ -106,6 +126,20 @@ static const StringTable s_EN = {
     L"Cancel",
     L"Language",
     L"About",
+
+    // Abort notification dialog
+    L"Operation cancelled",
+    L"%d of %d files were not processed.\nDetails have been logged.",
+    L"Open log",
+    L"Close",
+
+    // Operation log
+    L"COPY",
+    L"MOVE",
+    L"Target:",
+    L"CANCELLED",
+    L"Succeeded:",
+    L"Failed:",
 };
 
 static const StringTable* s_pActive = &s_DE;
