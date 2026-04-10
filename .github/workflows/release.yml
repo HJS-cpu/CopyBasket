@@ -31,21 +31,23 @@ jobs:
       - name: Build CB-CMT (regsvr Tool)
         run: msbuild "regsvr Tool\CopyBasketContextMenu.sln" /p:Configuration=Release /p:Platform=x64 /verbosity:minimal
 
-      - name: Install NSIS
+      - name: Install NSIS via scoop
         shell: pwsh
         run: |
-          Write-Host "Downloading NSIS 3.10 installer..."
-          $url = "https://downloads.sourceforge.net/project/nsis/NSIS%203/3.10/nsis-3.10-setup.exe"
-          $installer = Join-Path $env:RUNNER_TEMP "nsis-setup.exe"
-          Invoke-WebRequest -Uri $url -OutFile $installer -UseBasicParsing -MaximumRedirection 10 -Headers @{ "User-Agent" = "Mozilla/5.0" }
+          $ErrorActionPreference = 'Stop'
 
-          Write-Host "Installer size: $((Get-Item $installer).Length) bytes"
-          Write-Host "Running NSIS installer silently..."
-          Start-Process -FilePath $installer -ArgumentList "/S" -Wait -NoNewWindow
+          Write-Host "Installing scoop..."
+          Invoke-Expression "& { $(Invoke-RestMethod get.scoop.sh) } -RunAsAdmin"
 
-          $makensis = "${env:ProgramFiles(x86)}\NSIS\makensis.exe"
+          # Add scoop shims to PATH for this session
+          $env:PATH = "$env:USERPROFILE\scoop\shims;$env:PATH"
+
+          Write-Host "Installing NSIS..."
+          scoop install nsis
+
+          $makensis = "$env:USERPROFILE\scoop\apps\nsis\current\makensis.exe"
           if (-not (Test-Path $makensis)) {
-            throw "NSIS installation failed — makensis.exe not found at $makensis"
+            throw "NSIS installation failed — $makensis not found"
           }
           Write-Host "NSIS ready at: $makensis"
           "NSIS_PATH=$makensis" | Out-File -FilePath $env:GITHUB_ENV -Append
