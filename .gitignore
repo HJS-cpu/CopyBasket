@@ -26,6 +26,10 @@ Debug/
 *.VC.opendb
 ipch/
 
+# Windows
+desktop.ini
+Thumbs.db
+
 # Claude
 CLAUDE.md
 .claude/
