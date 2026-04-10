@@ -148,12 +148,13 @@ Bei Abbruch oder fehlgeschlagenen Dateioperationen (insbesondere beim Verschiebe
 - **Trigger:** `fAborted || !notProcessed.empty()`
 - **Log-Datei:** `%APPDATA%\CopyBasket\operations.log` (UTF-16LE mit BOM, `CREATE_ALWAYS` → wird pro Incident ueberschrieben, keine History)
   - Inhalt: Zeitstempel, Operationstyp (KOPIEREN/VERSCHIEBEN), Zielordner, Liste "Erfolgreich:" + "Fehlgeschlagen:" + Status (ABGEBROCHEN falls zutreffend)
-  - i18n: Log-Strings via `StringTable` (LogOpCopy, LogOpMove, LogTarget, LogAborted, LogSucceeded, LogFailed)
+  - i18n Log-Strings via `StringTable`: `LogOpCopy`, `LogOpMove`, `LogTarget`, `LogAborted`, `LogSucceeded`, `LogFailed`
 - **Abort-Dialog:** `TaskDialogIndirect` (Vista+, via `comctl32.lib`)
   - Inhalt: "%d von %d Dateien wurden nicht verarbeitet. Details wurden protokolliert."
   - Buttons: **"Log oeffnen"** (oeffnet Log-Datei via `ShellExecuteW`) und **"Schliessen"**
   - Default-Button: "Schliessen"
   - Icon: `TD_WARNING_ICON`
+  - i18n Dialog-Strings via `StringTable`: `AbortTitle`, `AbortMsgFmt`, `AbortBtnOpenLog`, `AbortBtnClose`
 - **CFileOperationProgressSink:** bleibt minimal — nur das urspruengliche Korb-Tracking. Das Logging passiert vollstaendig in `ExecuteFileOpCOM` per Filesystem-Check, damit es unabhaengig vom Callback-Verhalten zuverlaessig funktioniert
 
 ### Einstellungen-Dialog
@@ -189,6 +190,7 @@ Bei Abbruch oder fehlgeschlagenen Dateioperationen (insbesondere beim Verschiebe
 - **Sprachen:** Deutsch + Englisch
 - **Output:** `build\CopyBasket-X.Y.Z-setup.exe`
 - **Build:** Nur via GitHub Actions (NSIS lokal nicht verfuegbar), getriggert durch Tag-Push (`git tag vX.Y.Z && git push origin vX.Y.Z`)
+- **NSIS-Installation im Workflow:** `.github/workflows/release.yml` installiert NSIS via **scoop** (inkl. `scoop bucket add extras`, da NSIS im extras-Bucket liegt). chocolatey und direkte SourceForge-Downloads waren unzuverlaessig (Cloudflare-Challenge, 503/504), scoop hat eigene Infrastruktur und ist auf GH Actions stabil
 
 ### Release-Assets (GitHub)
 
