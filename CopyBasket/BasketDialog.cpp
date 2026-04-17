@@ -266,23 +266,29 @@ static void UpdateStatusBar(DlgData* dd) {
     SendMessageW(dd->hStatusBar, SB_SETTEXTW, 0, (LPARAM)szText);
 }
 
-static void RemoveSelected(HWND hList) {
+static void RefreshFromDisk(DlgData* dd) {
+    std::vector<std::wstring> files = BasketStore::ReadBasket();
+    PopulateListView(dd->hList, files);
+    UpdateStatusBar(dd);
+}
+
+static void RemoveSelected(DlgData* dd) {
     std::vector<std::wstring> remaining;
-    int count = ListView_GetItemCount(hList);
+    int count = ListView_GetItemCount(dd->hList);
 
     for (int i = 0; i < count; i++) {
-        if (ListView_GetItemState(hList, i, LVIS_SELECTED) & LVIS_SELECTED)
+        if (ListView_GetItemState(dd->hList, i, LVIS_SELECTED) & LVIS_SELECTED)
             continue;
 
         WCHAR szPath[MAX_PATH] = {};
-        ListView_GetItemText(hList, i, 2, szPath, MAX_PATH);
+        ListView_GetItemText(dd->hList, i, 2, szPath, MAX_PATH);
         if (szPath[0] != L'\0') {
             remaining.push_back(szPath);
         }
     }
 
     BasketStore::WriteBasket(remaining);
-    PopulateListView(hList, remaining);
+    RefreshFromDisk(dd);
 }
 
 static void LayoutControls(HWND hwnd, DlgData* dd);  // forward declaration
@@ -485,10 +491,8 @@ static LRESULT CALLBACK DlgWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lP
             0, 0, 0, 0,
             hwnd, nullptr, GetModuleHandle(NULL), nullptr);
 
-        // Populate
-        std::vector<std::wstring> files = BasketStore::ReadBasket();
-        PopulateListView(dd->hList, files);
-        UpdateStatusBar(dd);
+        RefreshFromDisk(dd);
+        DragAcceptFiles(hwnd, TRUE);
 
         LayoutControls(hwnd, dd);
 
@@ -526,11 +530,31 @@ static LRESULT CALLBACK DlgWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lP
         }
         return 0;
 
+    case WM_DROPFILES: {
+        if (!dd) return 0;
+        HDROP hDrop = (HDROP)wParam;
+        UINT count = DragQueryFileW(hDrop, 0xFFFFFFFF, NULL, 0);
+        std::vector<std::wstring> paths;
+        paths.reserve(count);
+        for (UINT i = 0; i < count; i++) {
+            UINT len = DragQueryFileW(hDrop, i, NULL, 0);
+            if (len == 0) continue;
+            std::wstring p(len, L'\0');
+            DragQueryFileW(hDrop, i, &p[0], len + 1);
+            paths.push_back(p);
+        }
+        DragFinish(hDrop);
+        if (!paths.empty()) {
+            BasketStore::AddFiles(paths);
+            RefreshFromDisk(dd);
+        }
+        return 0;
+    }
+
     case WM_COMMAND:
         if (LOWORD(wParam) == IDC_REMOVE) {
             if (dd) {
-                RemoveSelected(dd->hList);
-                UpdateStatusBar(dd);
+                RemoveSelected(dd);
                 UpdateTreeForSelection(dd);
             }
         } else if (LOWORD(wParam) == IDC_CLOSE || LOWORD(wParam) == IDCANCEL) {
@@ -551,8 +575,7 @@ static LRESULT CALLBACK DlgWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lP
             if (nm->code == LVN_KEYDOWN) {
                 NMLVKEYDOWN* kd = (NMLVKEYDOWN*)lParam;
                 if (kd->wVKey == VK_DELETE && dd) {
-                    RemoveSelected(dd->hList);
-                    UpdateStatusBar(dd);
+                    RemoveSelected(dd);
                     UpdateTreeForSelection(dd);
                 } else if (kd->wVKey == 'A' && (GetKeyState(VK_CONTROL) & 0x8000)) {
                     ListView_SetItemState(dd->hList, -1, LVIS_SELECTED, LVIS_SELECTED);

@@ -20,19 +20,13 @@ namespace FileOps {
 class CFileOperationProgressSink : public IFileOperationProgressSink {
     volatile LONG m_cRef;
     bool m_removeFromBasket;
-    std::vector<std::wstring> m_basket;  // in-memory basket, written once in FinishOperations
+    std::vector<std::wstring> m_processed;  // successfully processed paths
 
     void TrackSuccess(IShellItem* psiItem) {
         if (!m_removeFromBasket || !psiItem) return;
         PWSTR pszPath = NULL;
         if (SUCCEEDED(psiItem->GetDisplayName(SIGDN_FILESYSPATH, &pszPath))) {
-            // Remove from in-memory basket (case-insensitive)
-            for (auto it = m_basket.begin(); it != m_basket.end(); ++it) {
-                if (_wcsicmp(it->c_str(), pszPath) == 0) {
-                    m_basket.erase(it);
-                    break;
-                }
-            }
+            m_processed.push_back(pszPath);
             CoTaskMemFree(pszPath);
         }
     }
@@ -40,7 +34,6 @@ class CFileOperationProgressSink : public IFileOperationProgressSink {
 public:
     CFileOperationProgressSink(bool removeFromBasket)
         : m_cRef(1), m_removeFromBasket(removeFromBasket) {
-        if (removeFromBasket) m_basket = BasketStore::ReadBasket();
     }
 
     // IUnknown
@@ -62,7 +55,19 @@ public:
 
     IFACEMETHODIMP StartOperations()    { return S_OK; }
     IFACEMETHODIMP FinishOperations(HRESULT) {
-        if (m_removeFromBasket) BasketStore::WriteBasket(m_basket);
+        if (m_removeFromBasket && !m_processed.empty()) {
+            // Read basket fresh — preserves items added during the operation
+            std::vector<std::wstring> basket = BasketStore::ReadBasket();
+            for (const auto& proc : m_processed) {
+                for (auto it = basket.begin(); it != basket.end(); ++it) {
+                    if (_wcsicmp(it->c_str(), proc.c_str()) == 0) {
+                        basket.erase(it);
+                        break;
+                    }
+                }
+            }
+            BasketStore::WriteBasket(basket);
+        }
         return S_OK;
     }
     IFACEMETHODIMP PreRenameItem(DWORD, IShellItem*, LPCWSTR) { return S_OK; }

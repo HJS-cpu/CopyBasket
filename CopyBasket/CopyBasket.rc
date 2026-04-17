@@ -25,12 +25,12 @@ BEGIN
         BEGIN
             VALUE "CompanyName", "HJS\0"
             VALUE "FileDescription", "CopyBasket Shell Extension\0"
-            VALUE "FileVersion", "1.1.0\0"
+            VALUE "FileVersion", COPYBASKET_VERSION_STR_A "\0"
             VALUE "InternalName", "CopyBasket\0"
             VALUE "LegalCopyright", "\u00A9 2026 HJS (Hans-Joachim Schlingensief)\0"
             VALUE "OriginalFilename", "CopyBasket.dll\0"
             VALUE "ProductName", "CopyBasket\0"
-            VALUE "ProductVersion", "1.1.0\0"
+            VALUE "ProductVersion", COPYBASKET_VERSION_STR_A "\0"
         END
     END
     BLOCK "VarFileInfo"

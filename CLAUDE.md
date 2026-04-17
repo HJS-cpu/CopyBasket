@@ -42,15 +42,15 @@ regsvr32 /u x64\Release\CopyBasket.dll
 | ShellExt.cpp | IShellExtInit::Initialize, IContextMenu (QueryContextMenu, InvokeCommand, GetCommandString) |
 | BasketStore.h/.cpp | Korb-Datei lesen/schreiben/leeren, Duplikat-Pruefung. `GetBasketDirPath()` public (fuer Log-Pfad), `GetBasketFilePath()` intern/static |
 | FileOps.h/.cpp | IFileOperation + CFileOperationProgressSink (async, Korb-Update gesammelt in FinishOperations), BrowseForFolder (IFileDialog, mit Re-Entrance-Guard), Incident-Log via Pre-Scan/Post-Check, TaskDialog mit "Log oeffnen" |
-| BasketDialog.h/.cpp | ListView-Dialog mit TreeView-Detail-Panel, Splitter, System-Icons, Typ-Spalte, Entfernen-Funktion |
+| BasketDialog.h/.cpp | ListView-Dialog mit TreeView-Detail-Panel, Splitter, System-Icons, Typ-Spalte, Entfernen-Funktion, Drag&Drop-Ziel (WM_DROPFILES). Shared `RefreshFromDisk(DlgData*)`-Helper fuer `ReadBasket + PopulateListView + UpdateStatusBar` |
 | Strings.h/.cpp | i18n String-Tabellen (DE/EN), LoadLanguageSetting(), SaveLanguageSetting() |
 | SettingsDialog.h/.cpp | Einstellungen-Dialog mit Tab Control (Sprache / \u00DCber mit Website-Link) |
-| Version.h | Zentrale Versionskonstanten (COPYBASKET_VERSION_*) |
+| Version.h | Zentrale Versionskonstanten (COPYBASKET_VERSION_MAJOR/MINOR/PATCH/BUILD). `COPYBASKET_VERSION_STR` (wide) und `COPYBASKET_VERSION_STR_A` (narrow) werden via Preprocessor-Stringification aus den numerischen Macros abgeleitet — einzige Quelle der Wahrheit |
 | CopyBasket.h | Klassendeklarationen (CShellExtClassFactory, CShellExt), CmdOffset Enum |
 | GUID.h | CLSID_CopyBasket Definition |
 | CopyBasket.def | DLL Exports (DllCanUnloadNow, DllGetClassObject, DllRegisterServer, DllUnregisterServer) |
 | resource.h | Resource-IDs (IDI_BASKET, IDR_VERSION1) |
-| CopyBasket.rc | Versioninfo-Resource |
+| CopyBasket.rc | Versioninfo-Resource (FILEVERSION/PRODUCTVERSION + FileVersion/ProductVersion-Strings alle aus `Version.h`-Macros abgeleitet) |
 | res/basket.ico | Menu-Icon Resource |
 | installer/CopyBasket.nsi | NSIS Installer-Skript (regsvr32, x64/x86 Erkennung) |
 | .github/workflows/release.yml | GitHub Actions Build & Release Workflow |
@@ -81,7 +81,7 @@ Items sind grayed wenn der Korb leer ist. "Zum Korb hinzufuegen" und "Pfad kopie
 
 "Kopieren nach..." und "Verschieben nach..." sind auch bei leerem Korb aktiv, wenn Dateien/Ordner selektiert sind — operieren dann direkt auf der Auswahl statt auf dem Korb.
 
-Alle Dateioperationen (Kopieren/Verschieben) laufen nicht-blockierend auf einem Hintergrund-Thread (`_beginthreadex`) via `IFileOperation`. Erfolgreich verarbeitete Dateien werden in-memory aus dem Korb entfernt (`CFileOperationProgressSink::PostCopyItem`/`PostMoveItem`), der Korb wird einmalig in `FinishOperations` auf Platte geschrieben (O(N) statt O(N\u00B2)). Bei Abbruch oder Fehler bleiben nur die noch nicht verarbeiteten Dateien im Korb. Bei Fallback auf selektierte Dateien (leerer Korb) wird der Korb nicht angefasst.
+Alle Dateioperationen (Kopieren/Verschieben) laufen nicht-blockierend auf einem Hintergrund-Thread (`_beginthreadex`) via `IFileOperation`. Erfolgreich verarbeitete Dateien werden via `CFileOperationProgressSink::PostCopyItem`/`PostMoveItem` in einer `m_processed`-Liste gesammelt. In `FinishOperations` wird der Korb **frisch von Platte gelesen**, die verarbeiteten Items abgezogen, und das Ergebnis zurueckgeschrieben — so bleiben waehrend der Operation hinzugefuegte Eintraege erhalten (Race-Condition-sicher). Bei Abbruch oder Fehler bleiben nur die noch nicht verarbeiteten Dateien im Korb. Bei Fallback auf selektierte Dateien (leerer Korb) wird der Korb nicht angefasst.
 
 ### Ordner-Ziel bei "hierher"-Befehlen
 
@@ -117,6 +117,7 @@ Das Hauptmenu-Item "CopyBasket" zeigt ein eigenes Icon:
 - **Strg+A:** Selektiert alle Eintraege im ListView (via `LVN_KEYDOWN` + `ListView_SetItemState` mit Index -1)
 - **Initialer Fokus:** ListView erhaelt beim Oeffnen sofort den Fokus (`SetFocus` nach `ShowWindow`), sodass Tastaturkuerzel (Strg+A, Entf) direkt nutzbar sind
 - **Statusbar:** Native Windows-Statusbar (`STATUSCLASSNAMEW`) am unteren Fensterrand mit `SBARS_SIZEGRIP`. Zeigt Dateianzahl im Korb (z.B. "5 Dateien" / "5 files"). Aktualisiert sich automatisch beim Entfernen von Eintraegen. Layout wird in `LayoutControls()` beruecksichtigt (Statusbar-Hoehe von verfuegbarer Flaeche abgezogen)
+- **Drag&Drop:** Dialog akzeptiert Datei-/Ordner-Drops aus dem Explorer via `DragAcceptFiles(hwnd, TRUE)` (einmalig in `WM_CREATE`). `WM_DROPFILES`-Handler extrahiert Pfade via `DragQueryFileW`, uebergibt sie an `BasketStore::AddFiles` (Duplikat-Pruefung dort) und ruft `RefreshFromDisk(dd)` fuer die UI-Aktualisierung. Zusammenspiel mit Auto-Close: waehrend eines Drags bleibt der Dialog offen, da der Drop-Target-Status nicht als WA_INACTIVE zaehlt
 
 #### TreeView-Detail-Panel
 

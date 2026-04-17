@@ -18,6 +18,7 @@ A Windows Explorer shell extension that lets you collect files into a virtual "b
 | **Copy Path** | Copy selected file/folder paths to the clipboard |
 | **Browse Dialog** | Choose a target folder via modern IFileDialog |
 | **Basket Viewer** | ListView with native Windows icons, sortable columns (Name / Type / Path), statusbar, Ctrl+A, remove function |
+| **Drag & Drop** | Drop files or folders from Explorer directly onto the open basket dialog to add them |
 | **Directory Preview** | TreeView panel shows the full recursive contents of the selected basket entry, with real Explorer icons |
 | **Resizable Split** | Adjustable splitter between ListView and TreeView — saved across sessions |
 | **Incident Log** | Aborted or incomplete operations are logged in detail and surfaced via a TaskDialog with "Open Log" button |
@@ -139,6 +140,12 @@ This project is provided as-is. See the [LICENSE](LICENSE) file for details.
 ---
 
 ## 📝 Changelog
+
+### v1.5.0
+- **Drag & Drop into the basket viewer** — drop files or folders from Explorer directly onto the open basket dialog to add them (duplicate-safe)
+- **Race-condition-safe basket update** after copy/move: `FinishOperations` now re-reads the basket from disk and subtracts the processed items, so entries added **during** a long-running operation are preserved
+- **Centralised version strings** — `COPYBASKET_VERSION_STR` (wide) and `COPYBASKET_VERSION_STR_A` (narrow) are derived from the numeric macros via preprocessor stringification; `CopyBasket.rc` now uses them so `FileVersion` / `ProductVersion` stay in sync automatically
+- **Internal refactor:** shared `RefreshFromDisk(DlgData*)` helper unifies the `ReadBasket` → `PopulateListView` → `UpdateStatusBar` sequence across `WM_CREATE`, `WM_DROPFILES`, and remove-selected
 
 ### v1.4.0
 - **Basket dialog: TreeView detail panel** — shows the full recursive contents of the selected basket entry (folders and all nested files), read-only
