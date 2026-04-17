@@ -71,6 +71,8 @@ jobs:
           Copy-Item "x64\Release\CopyBasket.dll" "_release\CopyBasket_x64.dll"
           Copy-Item "Release\CopyBasket.dll" "_release\CopyBasket_x86.dll"
           Copy-Item "regsvr Tool\bin\Release\CB-CMT.exe" "_release\CB-CMT.exe"
+          Copy-Item "portable\README.txt" "_release\README.txt"
+          Copy-Item "portable\Lies.mich.txt" "_release\Lies.mich.txt"
           Compress-Archive -Path "_release\*" -DestinationPath "CopyBasket_${{ github.ref_name }}.zip"
         shell: pwsh
 

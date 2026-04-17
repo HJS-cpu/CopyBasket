@@ -1,0 +1,153 @@
+================================================================================
+                                  CopyBasket
+                      Windows Explorer Shell-Erweiterung
+================================================================================
+
+Eine Windows-Explorer-Shell-Erweiterung zum Sammeln von Dateien in einen
+virtuellen "Korb" und anschließendem Kopieren oder Verschieben in ein
+Zielverzeichnis.
+
+
+--------------------------------------------------------------------------------
+INHALT DIESES PAKETS
+--------------------------------------------------------------------------------
+
+  CopyBasket_x64.dll    Shell-Erweiterung DLL (64-Bit Windows)
+  CopyBasket_x86.dll    Shell-Erweiterung DLL (32-Bit Windows)
+  CB-CMT.exe            CopyBasket Context Menu Tool (Aktivieren / Deaktivieren)
+  Lies.mich.txt         Diese Datei
+  README.txt            Englische Dokumentation
+
+
+--------------------------------------------------------------------------------
+INSTALLATION
+--------------------------------------------------------------------------------
+
+1. CopyBasket_x64.dll (oder CopyBasket_x86.dll auf 32-Bit-Windows) zusammen
+   mit CB-CMT.exe in einen dauerhaften Ordner kopieren, z.B.:
+
+       C:\Program Files\CopyBasket\
+
+   Die DLL darf nach der Aktivierung NICHT gelöscht oder verschoben werden —
+   die Shell-Erweiterung wird aus diesem Pfad geladen.
+
+2. CB-CMT.exe starten. Das Tool fordert Administratorrechte an.
+
+3. "Activate" wählen und bestätigen. CB-CMT registriert die DLL via regsvr32
+   und benachrichtigt die Windows-Shell.
+
+4. Rechtsklick auf eine Datei, einen Ordner oder den Ordner-Hintergrund im
+   Explorer — das "CopyBasket"-Untermenü sollte jetzt erscheinen.
+
+
+--------------------------------------------------------------------------------
+DEINSTALLATION
+--------------------------------------------------------------------------------
+
+CB-CMT.exe erneut starten, "Deactivate" wählen und bestätigen.
+
+Um zusätzlich die Benutzereinstellungen (Sprach-Einstellung, Dialog-Größe,
+Korb-Datei) zu entfernen: vor dem Bestätigen der Deaktivierung die Checkbox
+"Delete User Settings" aktivieren.
+
+Danach kann der Ordner mit DLL und CB-CMT.exe einfach gelöscht werden.
+
+
+--------------------------------------------------------------------------------
+FUNKTIONEN
+--------------------------------------------------------------------------------
+
+  * Dateien und Ordner von überall in einen persistenten Korb sammeln
+  * Korb-Inhalt in den aktuellen Ordner oder ein gewähltes Verzeichnis
+    kopieren oder verschieben
+  * Ausgewählte Pfade in die Zwischenablage kopieren
+  * Korb-Anzeige: sortierbare ListView mit nativen Windows-Icons, TreeView-
+    Detail-Panel für Ordner, beweglicher Splitter, Statusbar, Strg+A, Entfernen
+  * Drag & Drop von Dateien oder Ordnern aus dem Explorer direkt in den
+    offenen Korb
+  * Nicht-blockierende asynchrone Dateioperationen (IFileOperation auf
+    Hintergrund-Thread)
+  * Vorfalls-Log mit TaskDialog-Benachrichtigung bei Abbruch / Teilfehlern
+  * Deutsche und englische Oberfläche, umschaltbar über Einstellungen
+
+
+--------------------------------------------------------------------------------
+VERSIONSHISTORIE
+--------------------------------------------------------------------------------
+
+v1.5.0
+  - Drag & Drop in die Korb-Anzeige: Dateien oder Ordner aus dem Explorer
+    direkt auf den offenen Korb-Dialog ziehen (duplikat-sicher)
+  - Race-Condition-sichere Korb-Aktualisierung: FinishOperations liest den
+    Korb frisch von Platte und zieht verarbeitete Items ab — während einer
+    laufenden Kopier- / Verschiebe-Operation hinzugefügte Einträge bleiben
+    erhalten
+  - Zentralisierte Versionsstrings: Version.h-Macros leiten wide und narrow
+    Versionsstrings ab; CopyBasket.rc nutzt sie für FileVersion / ProductVersion
+  - Interner Refactor: geteilter RefreshFromDisk-Helper im BasketDialog
+
+v1.4.0
+  - Korb-Dialog: TreeView-Detail-Panel zeigt den kompletten rekursiven Inhalt
+    eines ausgewählten Ordner-Eintrags (nur lesend)
+  - Beweglicher Splitter zwischen ListView und TreeView, in Registry persistent
+  - Native Windows-System-Icons in ListView und TreeView
+  - Neue "Typ"-Spalte (Datei / Verzeichnis)
+  - Vorfalls-Log bei abgebrochenen / fehlgeschlagenen Operationen mit Pre-Scan
+    + Filesystem-Post-Check; TaskDialog mit "Log öffnen"-Button
+
+v1.3.0
+  - Migration auf moderne IFileOperation-API mit CFileOperationProgressSink
+  - Intelligentes Korb-Tracking: nur erfolgreich verarbeitete Dateien werden
+    entfernt
+  - Unterstützung für Navigationsbereich und virtuelle Ordner via
+    IShellItemArray-Fallback
+
+v1.2.0
+  - Korb-Dialog: Statusbar, sortierbare Spalten, Strg+A, initialer Fokus
+  - BeginDeferWindowPos für flüssiges Resizing
+  - Rechtsklick auf einzelnen Ordner nutzt diesen als Ziel für
+    "Korb hierher kopieren / verschieben"
+  - BrowseForFolder-Re-Entrance-Guard
+  - CB-CMT: "Delete User Settings"-Checkbox
+  - Installer entfernt %APPDATA%\CopyBasket bei Deinstallation
+
+v1.1.0
+  - NSIS-Installer mit automatischer regsvr32-Registrierung / Deregistrierung
+  - Architektur-Erkennung (x64 / x86)
+  - Eintrag in "Programme und Features"
+  - Einstellungen-Dialog mit Tab Control (Sprache + Über)
+
+v1.0.0
+  - Erstveröffentlichung
+  - Virtueller Korb zum Sammeln von Dateien und Ordnern
+  - Kopieren / Verschieben in aktuelles oder gewähltes Verzeichnis
+  - Pfad in Zwischenablage kopieren
+  - ListView-Korb-Anzeige mit Entfernen-Funktion
+  - Nicht-blockierende asynchrone Dateioperationen
+  - Deutsche und englische Oberfläche
+
+
+--------------------------------------------------------------------------------
+KONTAKT & LINKS
+--------------------------------------------------------------------------------
+
+  Autor:      Hans-Joachim Schlingensief (HJS)
+  E-Mail:     hajo.schlingensief@gmail.com
+  Webseite:   https://hjs.page.gd/cb
+  GitHub:     https://github.com/HJS-cpu/CopyBasket
+
+  Neueste Version:
+      https://github.com/HJS-cpu/CopyBasket/releases/latest
+
+  Bug-Tracker:
+      https://github.com/HJS-cpu/CopyBasket/issues
+
+
+--------------------------------------------------------------------------------
+LIZENZ
+--------------------------------------------------------------------------------
+
+Diese Software wird "wie besehen" bereitgestellt. Details in der LICENSE-Datei
+im Quellcode-Repository.
+
+(c) 2026 Hans-Joachim Schlingensief
